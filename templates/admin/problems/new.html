@@ -1,0 +1,42 @@
+{% extends "base.html" %}
+{% block title %}New Problem — Code Golf{% endblock %}
+{% block content %}
+<h1>New Problem</h1>
+<form method="post" action="/admin/problems" class="problem-form">
+  <div class="form-group">
+    <label for="title">Title</label>
+    <input type="text" id="title" name="title" required>
+  </div>
+  <div class="form-group">
+    <label for="slug">Slug <small>(URL-safe, e.g. hello-world)</small></label>
+    <input type="text" id="slug" name="slug" required pattern="[a-z0-9\-]+">
+  </div>
+  <div class="form-group">
+    <label for="difficulty">Difficulty</label>
+    <select id="difficulty" name="difficulty">
+      <option value="easy">Easy</option>
+      <option value="medium" selected>Medium</option>
+      <option value="hard">Hard</option>
+    </select>
+  </div>
+  <div class="form-group">
+    <label for="time_limit_ms">Time Limit (ms)</label>
+    <input type="number" id="time_limit_ms" name="time_limit_ms" value="5000" min="100" max="30000">
+  </div>
+  <div class="form-group">
+    <label for="memory_limit_kb">Memory Limit (KB)</label>
+    <input type="number" id="memory_limit_kb" name="memory_limit_kb" value="65536" min="1024">
+  </div>
+  <div class="form-group">
+    <label for="description">Description <small>(Markdown)</small></label>
+    <textarea id="description" name="description" class="admin-input" rows="15" required></textarea>
+  </div>
+  <div class="form-group">
+    <label for="par_solution">Par Solution <small>(optional)</small></label>
+    <p class="form-hint">Reference solution used to compute par scores. Leave blank to disable par scoring for this problem.</p>
+    <textarea id="par_solution" name="par_solution" class="admin-input" rows="8"></textarea>
+  </div>
+  <button type="submit" class="btn btn-primary">Create Problem</button>
+  <a href="/admin/problems" class="btn">Cancel</a>
+</form>
+{% endblock %}

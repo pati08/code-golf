@@ -1,0 +1,23 @@
+{% extends "base.html" %}
+{% block title %}Code Golf — Home{% endblock %}
+{% block content %}
+<div class="hero">
+  <h1>Code Golf</h1>
+  <p class="hero-sub">Solve programming challenges in as few bytes as possible.</p>
+  <a href="/problems" class="btn btn-primary">Browse Problems</a>
+</div>
+
+{% if featured %}
+<section class="featured">
+  <h2>Featured Problems</h2>
+  <div class="problem-grid">
+    {% for p in featured %}
+    <a href="/problems/{{ p.slug }}" class="problem-card difficulty-{{ p.difficulty }}">
+      <h3>{{ p.title }}</h3>
+      <span class="badge badge-{{ p.difficulty }}">{{ p.difficulty }}</span>
+    </a>
+    {% endfor %}
+  </div>
+</section>
+{% endif %}
+{% endblock %}

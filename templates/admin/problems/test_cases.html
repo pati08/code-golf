@@ -1,0 +1,68 @@
+{% extends "base.html" %}
+{% block title %}Test Cases: {{ problem.title }} — Code Golf{% endblock %}
+{% block content %}
+<div class="workflow-header">
+  <div class="workflow-steps">
+    <span class="step done"><a href="/admin/problems/{{ problem.slug }}/edit">1. Edit Problem</a></span>
+    <span class="step-sep">→</span>
+    <span class="step active">2. Add Test Cases</span>
+    <span class="step-sep">→</span>
+    <span class="step">3. Publish</span>
+  </div>
+  <div class="workflow-actions">
+    <form method="post" action="/admin/problems/{{ problem.slug }}/publish" style="display:inline">
+      <button class="btn btn-primary">{% if problem.is_published %}✓ Published — Unpublish{% else %}Publish Problem{% endif %}</button>
+    </form>
+    <a href="/admin/problems" class="btn">← All Problems</a>
+  </div>
+</div>
+<h1>Test Cases — <a href="/admin/problems/{{ problem.slug }}/edit">{{ problem.title }}</a></h1>
+
+<h2>Existing Test Cases</h2>
+{% if test_cases %}
+<table class="table">
+  <thead>
+    <tr><th>#</th><th>Input</th><th>Expected Output</th><th>Sample?</th><th>Actions</th></tr>
+  </thead>
+  <tbody>
+    {% for tc in test_cases %}
+    <tr>
+      <td>{{ tc.ordinal }}</td>
+      <td><pre class="tc-preview">{{ tc.input[:100] }}</pre></td>
+      <td><pre class="tc-preview">{{ tc.expected_output[:100] }}</pre></td>
+      <td>{% if tc.is_sample %}✓{% endif %}</td>
+      <td>
+        <form method="post" action="/admin/test-cases/{{ tc.id }}/delete" onsubmit="return confirm('Delete this test case?')">
+          <button class="btn btn-sm btn-danger">Delete</button>
+        </form>
+      </td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+{% else %}
+<p class="empty-state">No test cases yet.</p>
+{% endif %}
+
+<h2>Add Test Case</h2>
+<form method="post" action="/admin/problems/{{ problem.slug }}/test-cases" class="tc-form">
+  <div class="form-group">
+    <label for="input">Input</label>
+    <textarea id="input" name="input" rows="5" class="admin-input" placeholder="stdin for this test case"></textarea>
+  </div>
+  <div class="form-group">
+    <label for="expected_output">Expected Output</label>
+    <textarea id="expected_output" name="expected_output" class="admin-input" rows="5" required placeholder="exact expected stdout"></textarea>
+  </div>
+  <div class="form-row">
+    <div class="form-group">
+      <label for="ordinal">Order</label>
+      <input type="number" id="ordinal" name="ordinal" value="{{ test_cases | length }}" min="0">
+    </div>
+    <div class="form-group form-check">
+      <label><input type="checkbox" name="is_sample"> Show as sample</label>
+    </div>
+  </div>
+  <button type="submit" class="btn btn-primary">Add Test Case</button>
+</form>
+{% endblock %}

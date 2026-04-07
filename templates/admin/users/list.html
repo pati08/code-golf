@@ -1,0 +1,28 @@
+{% extends "base.html" %}
+{% block title %}Admin: Users — Code Golf{% endblock %}
+{% block content %}
+<h1>Users</h1>
+<table class="table">
+  <thead>
+    <tr><th>ID</th><th>Username</th><th>Email</th><th>Admin?</th><th>Joined</th><th>Actions</th></tr>
+  </thead>
+  <tbody>
+    {% for u in users %}
+    <tr>
+      <td>{{ u.id }}</td>
+      <td>{{ u.username }}</td>
+      <td>{{ u.email }}</td>
+      <td>{% if u.is_admin %}✓{% endif %}</td>
+      <td>{{ u.created_at[:10] }}</td>
+      <td>
+        {% if u.id != current_user.id %}
+        <form method="post" action="/admin/users/{{ u.id }}/toggle-admin" style="display:inline">
+          <button class="btn btn-sm">{% if u.is_admin %}Revoke Admin{% else %}Grant Admin{% endif %}</button>
+        </form>
+        {% endif %}
+      </td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+{% endblock %}

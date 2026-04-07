@@ -1,0 +1,42 @@
+{% extends "base.html" %}
+{% block title %}Edit {{ problem.title }} — Code Golf{% endblock %}
+{% block content %}
+<h1>Edit Problem</h1>
+<form method="post" action="/admin/problems/{{ problem.slug }}" class="problem-form">
+  <div class="form-group">
+    <label for="title">Title</label>
+    <input type="text" id="title" name="title" value="{{ problem.title }}" required>
+  </div>
+  <div class="form-group">
+    <label for="slug">Slug</label>
+    <input type="text" id="slug" name="slug" value="{{ problem.slug }}" required pattern="[a-z0-9\-]+">
+  </div>
+  <div class="form-group">
+    <label for="difficulty">Difficulty</label>
+    <select id="difficulty" name="difficulty">
+      <option value="easy" {% if problem.difficulty == "easy" %}selected{% endif %}>Easy</option>
+      <option value="medium" {% if problem.difficulty == "medium" %}selected{% endif %}>Medium</option>
+      <option value="hard" {% if problem.difficulty == "hard" %}selected{% endif %}>Hard</option>
+    </select>
+  </div>
+  <div class="form-group">
+    <label for="time_limit_ms">Time Limit (ms)</label>
+    <input type="number" id="time_limit_ms" name="time_limit_ms" value="{{ problem.time_limit_ms }}" min="100" max="30000">
+  </div>
+  <div class="form-group">
+    <label for="memory_limit_kb">Memory Limit (KB)</label>
+    <input type="number" id="memory_limit_kb" name="memory_limit_kb" value="{{ problem.memory_limit_kb }}" min="1024">
+  </div>
+  <div class="form-group">
+    <label for="description">Description <small>(Markdown)</small></label>
+    <textarea id="description" name="description" rows="15" required>{{ problem.description }}</textarea>
+  </div>
+  <div class="form-group">
+    <label for="par_solution">Par Solution <small>(optional)</small></label>
+    <p class="form-hint">Reference solution used to compute par scores. Leave blank to disable par scoring for this problem.{% if problem.par_byte_count %} Current par: {{ problem.par_byte_count }} bytes.{% endif %}</p>
+    <textarea id="par_solution" name="par_solution" class="admin-input" rows="8">{{ problem.par_solution | default("") }}</textarea>
+  </div>
+  <button type="submit" class="btn btn-primary">Save Changes</button>
+  <a href="/admin/problems" class="btn">Cancel</a>
+</form>
+{% endblock %}

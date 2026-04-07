@@ -1,0 +1,26 @@
+{% extends "base.html" %}
+{% block title %}{{ problem.title }} Scoreboard — Code Golf{% endblock %}
+{% block content %}
+<h1>{{ problem.title }} — Scoreboard</h1>
+<p><a href="/problems/{{ problem.slug }}">← Back to problem</a></p>
+{% if entries %}
+<table class="table">
+  <thead>
+    <tr><th>#</th><th>User</th><th>Language</th><th>Bytes</th><th>When</th></tr>
+  </thead>
+  <tbody>
+    {% for e in entries %}
+    <tr class="{% if loop.index == 1 %}rank-gold{% elif loop.index == 2 %}rank-silver{% elif loop.index == 3 %}rank-bronze{% endif %}">
+      <td>{{ loop.index }}</td>
+      <td>{{ e.username }}</td>
+      <td>{{ e.language_name }}</td>
+      <td>{{ e.byte_count }}</td>
+      <td>{{ e.submitted_at[:10] }}</td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+{% else %}
+<p class="empty-state">No accepted submissions yet.</p>
+{% endif %}
+{% endblock %}

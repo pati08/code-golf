@@ -1,0 +1,23 @@
+{% extends "base.html" %}
+{% block title %}Admin: Submissions — Code Golf{% endblock %}
+{% block content %}
+<h1>Submissions <small>(last 100)</small></h1>
+<table class="table">
+  <thead>
+    <tr><th>ID</th><th>User</th><th>Problem</th><th>Language</th><th>Bytes</th><th>Status</th><th>When</th></tr>
+  </thead>
+  <tbody>
+    {% for s in submissions %}
+    <tr>
+      <td><a href="/submissions/{{ s.id }}/view">#{{ s.id }}</a></td>
+      <td>{{ s.username }}</td>
+      <td><a href="/problems/{{ s.problem_slug }}">{{ s.problem_title }}</a></td>
+      <td>{{ s.language_name }}</td>
+      <td>{{ s.byte_count }}</td>
+      <td><span class="status-badge status-{{ s.status }}">{{ s.status }}</span></td>
+      <td>{{ s.created_at[:16] }}</td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+{% endblock %}

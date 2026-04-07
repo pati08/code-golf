@@ -1,0 +1,23 @@
+{% extends "base.html" %}
+{% block title %}Problems — Code Golf{% endblock %}
+{% block content %}
+<h1>Problems</h1>
+{% if problems %}
+<table class="table">
+  <thead>
+    <tr><th>Title</th><th>Difficulty</th><th>Added</th></tr>
+  </thead>
+  <tbody>
+    {% for p in problems %}
+    <tr>
+      <td><a href="/problems/{{ p.slug }}">{{ p.title }}</a></td>
+      <td><span class="badge badge-{{ p.difficulty }}">{{ p.difficulty }}</span></td>
+      <td>{{ p.created_at[:10] }}</td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+{% else %}
+<p class="empty-state">No problems published yet. Check back soon!</p>
+{% endif %}
+{% endblock %}

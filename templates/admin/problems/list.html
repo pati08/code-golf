@@ -1,0 +1,26 @@
+{% extends "base.html" %}
+{% block title %}Admin: Problems — Code Golf{% endblock %}
+{% block content %}
+<h1>Problems <a href="/admin/problems/new" class="btn btn-primary btn-sm">+ New</a></h1>
+<table class="table">
+  <thead>
+    <tr><th>Title</th><th>Difficulty</th><th>Published</th><th>Actions</th></tr>
+  </thead>
+  <tbody>
+    {% for p in problems %}
+    <tr>
+      <td><a href="/problems/{{ p.slug }}">{{ p.title }}</a></td>
+      <td><span class="badge badge-{{ p.difficulty }}">{{ p.difficulty }}</span></td>
+      <td>{% if p.is_published %}<span class="badge badge-success">Yes</span>{% else %}<span class="badge badge-muted">No</span>{% endif %}</td>
+      <td class="actions">
+        <a href="/admin/problems/{{ p.slug }}/edit" class="btn btn-sm">Edit</a>
+        <a href="/admin/problems/{{ p.slug }}/test-cases" class="btn btn-sm">Test Cases</a>
+        <form method="post" action="/admin/problems/{{ p.slug }}/publish" style="display:inline">
+          <button class="btn btn-sm">{% if p.is_published %}Unpublish{% else %}Publish{% endif %}</button>
+        </form>
+      </td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+{% endblock %}

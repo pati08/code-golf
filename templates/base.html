@@ -1,0 +1,44 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>{% block title %}Code Golf{% endblock %}</title>
+  <link rel="stylesheet" href="/static/style.css">
+  <script src="https://unpkg.com/htmx.org@2.0.4" defer></script>
+  {% block extra_head %}{% endblock %}
+</head>
+<body>
+  <nav class="navbar">
+    <div class="nav-brand"><a href="/">⛳ Code Golf</a></div>
+    <ul class="nav-links">
+      <li><a href="/problems">Problems</a></li>
+      <li><a href="/scoreboard">Scoreboard</a></li>
+      {% if current_user %}
+        {% if current_user.is_admin %}
+          <li><a href="/admin">Admin</a></li>
+        {% endif %}
+        <li class="nav-user">{{ current_user.username }}</li>
+        <li>
+          <form method="post" action="/logout" style="display:inline">
+            <button type="submit" class="btn-link">Logout</button>
+          </form>
+        </li>
+      {% else %}
+        <li><a href="/login">Login</a></li>
+        <li><a href="/register">Register</a></li>
+      {% endif %}
+    </ul>
+  </nav>
+
+  <main class="container">
+    {% block content %}{% endblock %}
+  </main>
+
+  <footer class="site-footer">
+    <p>Code Golf Platform</p>
+  </footer>
+
+  {% block extra_scripts %}{% endblock %}
+</body>
+</html>

@@ -1,0 +1,25 @@
+{% extends "base.html" %}
+{% block title %}Admin Dashboard — Code Golf{% endblock %}
+{% block content %}
+<h1>Admin Dashboard</h1>
+<div class="stat-grid">
+  <div class="stat-card">
+    <div class="stat-value">{{ problem_count }}</div>
+    <div class="stat-label">Problems</div>
+    <a href="/admin/problems" class="btn btn-sm">Manage</a>
+  </div>
+  <div class="stat-card">
+    <div class="stat-value">{{ user_count }}</div>
+    <div class="stat-label">Users</div>
+    <a href="/admin/users" class="btn btn-sm">Manage</a>
+  </div>
+  <div class="stat-card">
+    <div class="stat-value">{{ submission_count }}</div>
+    <div class="stat-label">Submissions</div>
+    <a href="/admin/submissions" class="btn btn-sm">View</a>
+  </div>
+</div>
+<div class="admin-actions">
+  <a href="/admin/problems/new" class="btn btn-primary">+ New Problem</a>
+</div>
+{% endblock %}

@@ -1,0 +1,21 @@
+{% set status = submission.status %}
+{% set status_class = "status-" ~ status %}
+
+<div class="submission-result {{ status_class }}">
+  <div class="submission-header">
+    <span class="submission-status">{{ status | upper }}</span>
+    <span class="submission-bytes">{{ submission.byte_count }} bytes</span>
+    <span class="submission-lang">{{ submission.language_name }}</span>
+  </div>
+  {% if submission.error_output %}
+  <details class="error-details">
+    <summary>Details</summary>
+    <pre class="error-output">{{ submission.error_output }}</pre>
+  </details>
+  {% endif %}
+  <div class="submission-links">
+    <a href="/submissions/{{ submission.id }}/view">Permalink</a>
+    &nbsp;·&nbsp;
+    <a href="/problems/{{ submission.problem_slug }}/scoreboard">Scoreboard</a>
+  </div>
+</div>

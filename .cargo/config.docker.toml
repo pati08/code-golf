@@ -1,0 +1,7 @@
+# Docker-specific config (used during container builds)
+# Removes cranelift since Docker image doesn't have nightly with cranelift installed
+# Keeps mold linker and other optimizations
+
+[target.x86_64-unknown-linux-gnu]
+linker = "clang"
+rustflags = ["-C", "link-arg=-fuse-ld=/usr/bin/mold", "-Zshare-generics=y"]

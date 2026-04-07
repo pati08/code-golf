@@ -1,0 +1,24 @@
+{% extends "base.html" %}
+{% block title %}Scoreboard — Code Golf{% endblock %}
+{% block content %}
+<h1>Global Scoreboard</h1>
+{% if entries %}
+<table class="table">
+  <thead>
+    <tr><th>#</th><th>User</th><th>Solved</th><th>Total Bytes</th></tr>
+  </thead>
+  <tbody>
+    {% for e in entries %}
+    <tr class="{% if loop.index == 1 %}rank-gold{% elif loop.index == 2 %}rank-silver{% elif loop.index == 3 %}rank-bronze{% endif %}">
+      <td>{{ loop.index }}</td>
+      <td>{{ e.username }}</td>
+      <td>{{ e.solved_count }}</td>
+      <td>{{ e.total_bytes }}</td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+{% else %}
+<p class="empty-state">No submissions yet. Be the first to solve a problem!</p>
+{% endif %}
+{% endblock %}

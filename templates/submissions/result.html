@@ -1,0 +1,27 @@
+{% extends "base.html" %}
+{% block title %}Submission #{{ submission.id }} — Code Golf{% endblock %}
+{% block content %}
+<h1>Submission #{{ submission.id }}</h1>
+<div class="submission-detail-page">
+  <table class="meta-table">
+    <tr><th>Problem</th><td><a href="/problems/{{ submission.problem_slug }}">{{ submission.problem_title }}</a></td></tr>
+    <tr><th>User</th><td>{{ submission.username }}</td></tr>
+    <tr><th>Language</th><td>{{ submission.language_name }}</td></tr>
+    <tr><th>Byte count</th><td>{{ submission.byte_count }}</td></tr>
+    <tr><th>Status</th><td><span class="status-badge status-{{ submission.status }}">{{ submission.status | upper }}</span></td></tr>
+    <tr><th>Submitted</th><td>{{ submission.created_at }}</td></tr>
+    {% if submission.judged_at %}<tr><th>Judged</th><td>{{ submission.judged_at }}</td></tr>{% endif %}
+  </table>
+
+  {% if submission.error_output %}
+  <h3>Output</h3>
+  <pre class="error-output">{{ submission.error_output }}</pre>
+  {% endif %}
+
+  <div class="back-links">
+    <a href="/problems/{{ submission.problem_slug }}">← Back to problem</a>
+    &nbsp;·&nbsp;
+    <a href="/problems/{{ submission.problem_slug }}/scoreboard">Scoreboard</a>
+  </div>
+</div>
+{% endblock %}
