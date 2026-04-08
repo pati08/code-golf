@@ -3,4 +3,4 @@ code-golf.db
 code-golf.db-shm
 code-golf.db-wal
 target
-# rust-toolchain.toml
+dev_data/

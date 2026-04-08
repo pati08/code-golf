@@ -1,1 +1,5 @@
 /target
+code-golf.db
+code-golf.db-shm
+code-golf.db-wal
+dev_data/

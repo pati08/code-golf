@@ -6,11 +6,12 @@ services:
     ports:
       - "3000:3000"
     environment:
-      DATABASE_URL: sqlite:code-golf.db
+      DATABASE_URL: sqlite:db/code-golf.db
       RUST_LOG: info
     volumes:
       - ./static:/code-golf/static
       - ./templates:/code-golf/templates
+      - ./dev_data:/code-golf/db
     develop:
       watch:
         - path: src
