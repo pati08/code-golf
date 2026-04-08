@@ -1,5 +1,6 @@
 use crate::db::models::Language;
 
+#[allow(dead_code)]
 pub fn default_languages() -> Vec<Language> {
     vec![
         Language {

@@ -1,17 +1,26 @@
+use argon2::{
+    Argon2,
+    PasswordHash,
+    PasswordHasher,
+    PasswordVerifier,
+    password_hash::SaltString,
+    // password_hash::rand_core::OsRng,
+};
 use axum::{
-    Form,
+    Form, debug_handler,
     extract::State,
     response::{Html, Redirect},
 };
-use argon2::{
-    Argon2, PasswordHash, PasswordHasher, PasswordVerifier,
-    password_hash::{rand_core::OsRng, SaltString},
-};
+use rand::Rng;
 use serde::Deserialize;
 use sqlx::Row;
 use tower_sessions::Session;
 
-use crate::{app::AppState, auth::{CurrentUser, clear_session, set_session_user}, error::AppError};
+use crate::{
+    app::AppState,
+    auth::{CurrentUser, clear_session, set_session_user},
+    error::AppError,
+};
 
 #[derive(Deserialize)]
 pub struct RegisterForm {
@@ -31,6 +40,7 @@ pub async fn get_register(State(state): State<AppState>) -> Result<Html<String>,
     crate::app::render(&state.templates, "auth/register.html", ctx)
 }
 
+#[debug_handler]
 pub async fn post_register(
     State(state): State<AppState>,
     session: Session,
@@ -42,7 +52,12 @@ pub async fn post_register(
         ));
     }
 
-    let salt = SaltString::generate(&mut OsRng);
+    let salt = {
+        let mut rng = rand::rng();
+        let mut bytes = [0u8; 16];
+        rng.fill_bytes(&mut bytes);
+        SaltString::encode_b64(&bytes).expect("salt length too long to handle")
+    };
     let argon2 = Argon2::default();
     let password_hash = argon2
         .hash_password(form.password.as_bytes(), &salt)
@@ -76,11 +91,9 @@ pub async fn post_register(
             set_session_user(&session, &user).await?;
             Ok(Redirect::to("/"))
         }
-        Err(sqlx::Error::Database(e)) if e.message().contains("UNIQUE") => {
-            Err(AppError::BadRequest(
-                "Username or email already taken".to_string(),
-            ))
-        }
+        Err(sqlx::Error::Database(e)) if e.message().contains("UNIQUE") => Err(
+            AppError::BadRequest("Username or email already taken".to_string()),
+        ),
         Err(e) => Err(AppError::Database(e)),
     }
 }
@@ -97,16 +110,19 @@ pub async fn post_login(
 ) -> Result<Redirect, AppError> {
     use sqlx::Row;
 
-    let row = sqlx::query(
-        "SELECT id, username, password_hash, is_admin FROM users WHERE username = ?",
-    )
-    .bind(&form.username)
-    .fetch_optional(&state.db)
-    .await?;
+    let row =
+        sqlx::query("SELECT id, username, password_hash, is_admin FROM users WHERE username = ?")
+            .bind(&form.username)
+            .fetch_optional(&state.db)
+            .await?;
 
     let row = match row {
         Some(r) => r,
-        None => return Err(AppError::BadRequest("Invalid username or password".to_string())),
+        None => {
+            return Err(AppError::BadRequest(
+                "Invalid username or password".to_string(),
+            ));
+        }
     };
 
     let id: i64 = row.get("id");
@@ -127,7 +143,11 @@ pub async fn post_login(
         ));
     }
 
-    let current_user = CurrentUser { id, username, is_admin };
+    let current_user = CurrentUser {
+        id,
+        username,
+        is_admin,
+    };
     set_session_user(&session, &current_user).await?;
     Ok(Redirect::to("/"))
 }

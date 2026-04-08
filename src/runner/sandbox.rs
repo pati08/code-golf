@@ -6,6 +6,7 @@ pub struct ExecutionResult {
     pub stdout: String,
     pub stderr: String,
     pub exit_code: Option<i32>,
+    #[allow(dead_code)]
     pub wall_time_ms: u64,
     pub timed_out: bool,
 }

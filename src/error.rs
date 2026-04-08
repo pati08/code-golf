@@ -12,8 +12,10 @@ pub enum AppError {
     Template(#[from] minijinja::Error),
     #[error("Not found")]
     NotFound,
+    #[allow(dead_code)]
     #[error("Unauthorized")]
     Unauthorized,
+    #[allow(dead_code)]
     #[error("Forbidden")]
     Forbidden,
     #[error("Bad request: {0}")]

@@ -5,7 +5,6 @@ pub struct Config {
     pub database_url: String,
     pub host: String,
     pub port: u16,
-    pub session_secret: String,
 }
 
 impl Config {
@@ -18,8 +17,6 @@ impl Config {
                 .ok()
                 .and_then(|p| p.parse().ok())
                 .unwrap_or(3000),
-            session_secret: env::var("SESSION_SECRET")
-                .unwrap_or_else(|_| "change-me-in-production-32-bytes!!".to_string()),
         }
     }
 }

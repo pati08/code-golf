@@ -100,8 +100,7 @@ pub async fn post_create_problem(
     } else {
         Some(&form.par_solution)
     };
-    let par_byte_count: Option<i64> =
-        par_solution.map(|s| s.trim_end_matches('\n').len() as i64);
+    let par_byte_count: Option<i64> = par_solution.map(|s| s.trim_end_matches('\n').len() as i64);
 
     sqlx::query(
         "INSERT INTO problems (slug, title, description, difficulty, time_limit_ms, memory_limit_kb, created_by, par_solution, par_byte_count) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
@@ -125,7 +124,10 @@ pub async fn post_create_problem(
         }
     })?;
 
-    Ok(Redirect::to(&format!("/admin/problems/{}/test-cases", form.slug)))
+    Ok(Redirect::to(&format!(
+        "/admin/problems/{}/test-cases",
+        form.slug
+    )))
 }
 
 pub async fn get_edit_problem(
@@ -170,8 +172,7 @@ pub async fn post_update_problem(
     } else {
         Some(&form.par_solution)
     };
-    let par_byte_count: Option<i64> =
-        par_solution.map(|s| s.trim_end_matches('\n').len() as i64);
+    let par_byte_count: Option<i64> = par_solution.map(|s| s.trim_end_matches('\n').len() as i64);
 
     sqlx::query(
         "UPDATE problems SET slug = ?, title = ?, description = ?, difficulty = ?, time_limit_ms = ?, memory_limit_kb = ?, par_solution = ?, par_byte_count = ?, updated_at = datetime('now') WHERE slug = ?",
