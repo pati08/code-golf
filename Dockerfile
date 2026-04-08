@@ -29,13 +29,6 @@ RUN cargo chef prepare --recipe-path recipe.json
 FROM fetch AS builder
 ARG OPTIMIZE=false
 
-# COPY src src/
-# COPY Cargo.toml Cargo.lock .
-# COPY . .
-
-# Use Docker-specific config (no cranelift, which isn't available in nightly toolchain)
-# RUN cp .cargo/config.docker.toml .cargo/config.toml
-
 COPY --from=planner /code-golf/recipe.json recipe.json
 
 # Build dependencies - all crates are already fetched, this just compiles them
@@ -44,6 +37,10 @@ RUN if [ "$OPTIMIZE" = "true" ]; then \
     else \
       cargo chef cook --recipe-path recipe.json; \
     fi
+
+COPY . .
+
+RUN touch src/main.rs
 
 # Build the application
 RUN if [ "$OPTIMIZE" = "true" ]; then \

@@ -32,6 +32,8 @@ pre, code { font-family: 'Fira Code', 'Cascadia Code', monospace; font-size: 0.8
 .nav-links li a { color: #94a3b8; padding: 0.4rem 0.75rem; border-radius: 6px; font-size: 0.9rem; }
 .nav-links li a:hover { background: #1e293b; color: #f1f5f9; text-decoration: none; }
 .nav-user { color: #94a3b8; font-size: 0.9rem; padding: 0 0.5rem; }
+.nav-links li form button.btn-link { color: #94a3b8; padding: 0.4rem 0.75rem; border-radius: 6px; font-size: 0.9rem; }
+.nav-links li form button.btn-link:hover { background: #1e293b; color: #f1f5f9; text-decoration: none; }
 
 /* Buttons */
 .btn {

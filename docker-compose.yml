@@ -1,0 +1,21 @@
+services:
+  code-golf:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    ports:
+      - "3000:3000"
+    environment:
+      DATABASE_URL: sqlite:code-golf.db
+      RUST_LOG: info
+    volumes:
+      - ./static:/code-golf/static
+      - ./templates:/code-golf/templates
+    develop:
+      watch:
+        - path: src
+          action: rebuild
+        - path: Cargo.toml
+          action: rebuild
+        - path: Cargo.lock
+          action: rebuild
