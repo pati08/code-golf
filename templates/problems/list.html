@@ -1,23 +1,93 @@
 {% extends "base.html" %}
 {% block title %}Problems — Code Golf{% endblock %}
 {% block content %}
-<h1>Problems</h1>
-{% if problems %}
-<table class="table">
-  <thead>
-    <tr><th>Title</th><th>Difficulty</th><th>Added</th></tr>
-  </thead>
-  <tbody>
-    {% for p in problems %}
-    <tr>
-      <td><a href="/problems/{{ p.slug }}">{{ p.title }}</a></td>
-      <td><span class="badge badge-{{ p.difficulty }}">{{ p.difficulty }}</span></td>
-      <td>{{ p.created_at[:10] }}</td>
-    </tr>
-    {% endfor %}
-  </tbody>
-</table>
+
+<div class="problems-header">
+  <h1>Problems</h1>
+  <div class="filter-bar">
+    <div class="filter-group">
+      <span class="filter-label">Difficulty</span>
+      <a href="/problems{% if filter_status != "" %}?status={{ filter_status }}{% endif %}"
+         class="btn btn-sm{% if filter_difficulty == "" %} btn-primary{% endif %}">All</a>
+      <a href="/problems?difficulty=easy{% if filter_status != "" %}&status={{ filter_status }}{% endif %}"
+         class="btn btn-sm{% if filter_difficulty == "easy" %} btn-primary{% endif %}">Easy</a>
+      <a href="/problems?difficulty=medium{% if filter_status != "" %}&status={{ filter_status }}{% endif %}"
+         class="btn btn-sm{% if filter_difficulty == "medium" %} btn-primary{% endif %}">Medium</a>
+      <a href="/problems?difficulty=hard{% if filter_status != "" %}&status={{ filter_status }}{% endif %}"
+         class="btn btn-sm{% if filter_difficulty == "hard" %} btn-primary{% endif %}">Hard</a>
+    </div>
+    {% if is_logged_in %}
+    <div class="filter-group">
+      <span class="filter-label">Status</span>
+      <a href="/problems{% if filter_difficulty != "" %}?difficulty={{ filter_difficulty }}{% endif %}"
+         class="btn btn-sm{% if filter_status == "" %} btn-primary{% endif %}">All</a>
+      <a href="/problems?status=unsolved{% if filter_difficulty != "" %}&difficulty={{ filter_difficulty }}{% endif %}"
+         class="btn btn-sm{% if filter_status == "unsolved" %} btn-primary{% endif %}">Unsolved</a>
+      <a href="/problems?status=solved{% if filter_difficulty != "" %}&difficulty={{ filter_difficulty }}{% endif %}"
+         class="btn btn-sm{% if filter_status == "solved" %} btn-primary{% endif %}">Solved</a>
+    </div>
+    {% endif %}
+  </div>
+</div>
+
+{% if is_logged_in %}
+  {% if unsolved_problems %}
+  <div class="profile-section-header">
+    <h2>To Solve</h2>
+    <span class="profile-section-hint">{{ unsolved_problems | length }} remaining</span>
+  </div>
+  <table class="table">
+    <thead><tr><th>Title</th><th>Difficulty</th></tr></thead>
+    <tbody>
+      {% for p in unsolved_problems %}
+      <tr>
+        <td><a href="/problems/{{ p.slug }}">{{ p.title }}</a></td>
+        <td><span class="badge badge-{{ p.difficulty }}">{{ p.difficulty }}</span></td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% endif %}
+
+  {% if solved_problems %}
+  <div class="profile-section-header" style="margin-top: 2.5rem;">
+    <h2>Solved</h2>
+    <span class="profile-section-hint">{{ solved_problems | length }} solved</span>
+  </div>
+  <table class="table">
+    <thead><tr><th>Title</th><th>Difficulty</th><th></th></tr></thead>
+    <tbody>
+      {% for p in solved_problems %}
+      <tr>
+        <td><a href="/problems/{{ p.slug }}">{{ p.title }}</a></td>
+        <td><span class="badge badge-{{ p.difficulty }}">{{ p.difficulty }}</span></td>
+        <td><span class="solved-check">✓</span></td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% endif %}
+
+  {% if not unsolved_problems and not solved_problems %}
+  <p class="empty-state">No problems match this filter.</p>
+  {% endif %}
+
 {% else %}
-<p class="empty-state">No problems published yet. Check back soon!</p>
+  {% if all_problems %}
+  <table class="table">
+    <thead><tr><th>Title</th><th>Difficulty</th></tr></thead>
+    <tbody>
+      {% for p in all_problems %}
+      <tr>
+        <td><a href="/problems/{{ p.slug }}">{{ p.title }}</a></td>
+        <td><span class="badge badge-{{ p.difficulty }}">{{ p.difficulty }}</span></td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% else %}
+  <p class="empty-state">No problems published yet. Check back soon!</p>
+  {% endif %}
 {% endif %}
+
 {% endblock %}

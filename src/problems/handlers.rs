@@ -1,38 +1,97 @@
 use axum::{
-    extract::{Path, State},
+    extract::{Path, Query, State},
     response::Html,
 };
 use pulldown_cmark::{Parser, html};
+use serde::Deserialize;
 use sqlx::Row;
 
 use crate::{app::AppState, auth::OptionalUser, error::AppError};
 
+#[derive(Debug, Deserialize, Default)]
+pub struct FilterParams {
+    #[serde(default)]
+    pub difficulty: Option<String>,
+    #[serde(default)]
+    pub status: Option<String>,
+}
+
 pub async fn get_problems(
     State(state): State<AppState>,
     OptionalUser(user): OptionalUser,
+    Query(params): Query<FilterParams>,
 ) -> Result<Html<String>, AppError> {
-    let rows = sqlx::query(
-        "SELECT id, slug, title, difficulty, created_at FROM problems WHERE is_published = 1 ORDER BY created_at DESC",
-    )
-    .fetch_all(&state.db)
-    .await?;
+    let user_id: i64 = user.as_ref().map(|u| u.id).unwrap_or(0);
 
-    let problems: Vec<_> = rows
-        .iter()
-        .map(|r| {
-            minijinja::context! {
-                id => r.get::<i64, _>("id"),
-                slug => r.get::<String, _>("slug"),
-                title => r.get::<String, _>("title"),
-                difficulty => r.get::<String, _>("difficulty"),
-                created_at => r.get::<String, _>("created_at"),
-            }
-        })
+    let diff_clause = match params.difficulty.as_deref() {
+        Some("easy") | Some("medium") | Some("hard") => "AND p.difficulty = ?",
+        _ => "",
+    };
+
+    let sql = format!(
+        r#"SELECT
+            p.id, p.slug, p.title, p.difficulty,
+            CASE WHEN bs.user_id IS NOT NULL THEN 1 ELSE 0 END AS solved
+        FROM problems p
+        LEFT JOIN (
+            SELECT DISTINCT user_id, problem_id FROM best_submissions WHERE user_id = ?
+        ) bs ON bs.problem_id = p.id
+        WHERE p.is_published = 1 {diff_clause}
+        ORDER BY
+            CASE p.difficulty WHEN 'easy' THEN 1 WHEN 'medium' THEN 2 WHEN 'hard' THEN 3 ELSE 4 END,
+            p.title ASC"#
+    );
+
+    let valid_diff = params.difficulty.as_deref()
+        .filter(|d| matches!(*d, "easy" | "medium" | "hard"));
+
+    let rows = if let Some(diff) = valid_diff {
+        sqlx::query(&sql).bind(user_id).bind(diff).fetch_all(&state.db).await?
+    } else {
+        sqlx::query(&sql).bind(user_id).fetch_all(&state.db).await?
+    };
+
+    // Build problem list with solved flag
+    let all_items: Vec<(minijinja::Value, bool)> = rows.iter().map(|r| {
+        let solved = r.get::<i64, _>("solved") != 0;
+        let ctx = minijinja::context! {
+            slug => r.get::<String, _>("slug"),
+            title => r.get::<String, _>("title"),
+            difficulty => r.get::<String, _>("difficulty"),
+        };
+        (ctx, solved)
+    }).collect();
+
+    let is_logged_in = user.is_some();
+
+    // Partition into sections (only meaningful when logged in)
+    let show_solved = !matches!(params.status.as_deref(), Some("unsolved"));
+    let show_unsolved = !matches!(params.status.as_deref(), Some("solved"));
+
+    let solved_problems: Vec<_> = all_items.iter()
+        .filter(|(_, s)| *s && show_solved && is_logged_in)
+        .map(|(ctx, _)| ctx.clone())
         .collect();
 
+    let unsolved_problems: Vec<_> = all_items.iter()
+        .filter(|(_, s)| !*s && show_unsolved && is_logged_in)
+        .map(|(ctx, _)| ctx.clone())
+        .collect();
+
+    let all_problems: Vec<_> = if !is_logged_in {
+        all_items.into_iter().map(|(ctx, _)| ctx).collect()
+    } else {
+        vec![]
+    };
+
     let ctx = minijinja::context! {
-        problems,
+        all_problems,
+        solved_problems,
+        unsolved_problems,
         current_user => user,
+        filter_difficulty => params.difficulty.as_deref().unwrap_or(""),
+        filter_status => params.status.as_deref().unwrap_or(""),
+        is_logged_in,
     };
     crate::app::render(&state.templates, "problems/list.html", ctx)
 }
