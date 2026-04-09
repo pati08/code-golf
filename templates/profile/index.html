@@ -1,0 +1,114 @@
+{% extends "base.html" %}
+{% block title %}{{ current_user.username }} — Profile{% endblock %}
+{% block content %}
+
+<div class="profile-header">
+  <div>
+    <h1 class="profile-username">@{{ current_user.username }}</h1>
+    <p class="profile-since">Member since {{ member_since }}</p>
+  </div>
+  {% if stats.rank %}
+  <div class="profile-rank-badge">
+    <span class="profile-rank-num">#{{ stats.rank }}</span>
+    <span class="profile-rank-label">Global</span>
+  </div>
+  {% endif %}
+</div>
+
+<div class="stat-grid profile-stats">
+  <div class="stat-card">
+    <div class="stat-value">{{ stats.solved_count }}</div>
+    <div class="stat-label">Problems Solved</div>
+  </div>
+  <div class="stat-card">
+    <div class="stat-value">{{ stats.total_bytes }}</div>
+    <div class="stat-label">Total Bytes</div>
+  </div>
+  <div class="stat-card">
+    {% if stats.rank %}
+    <div class="stat-value">#{{ stats.rank }}</div>
+    {% else %}
+    <div class="stat-value stat-value-muted">—</div>
+    {% endif %}
+    <div class="stat-label">Leaderboard Rank</div>
+  </div>
+</div>
+
+{% if solved_problems %}
+<div class="profile-section-header">
+  <h2>Solved Problems</h2>
+  <span class="profile-section-hint">Sorted by improvement potential ↓</span>
+</div>
+<table class="table">
+  <thead>
+    <tr>
+      <th>Problem</th>
+      <th>Difficulty</th>
+      <th>Your Best</th>
+      <th>Global Best</th>
+      <th>Rank</th>
+      <th>Gap</th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for p in solved_problems %}
+    <tr>
+      <td><a href="/problems/{{ p.slug }}">{{ p.title }}</a></td>
+      <td><span class="badge badge-{{ p.difficulty }}">{{ p.difficulty }}</span></td>
+      <td><code class="byte-val">{{ p.user_best }}B</code></td>
+      <td><code class="byte-val">{{ p.global_best }}B</code></td>
+      <td>
+        {% if p.user_rank %}
+        <span class="rank-pos">#{{ p.user_rank }}<span class="rank-total">/{{ p.total_solvers }}</span></span>
+        {% endif %}
+      </td>
+      <td>
+        {% if p.gap == 0 %}
+          <span class="gap-none">✓ Best</span>
+        {% elif p.gap_pct <= 25 %}
+          <span class="gap-low">+{{ p.gap }}B</span>
+        {% elif p.gap_pct <= 75 %}
+          <span class="gap-mid">+{{ p.gap }}B</span>
+        {% else %}
+          <span class="gap-high">+{{ p.gap }}B</span>
+        {% endif %}
+      </td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+{% endif %}
+
+{% if unsolved_problems %}
+<div class="profile-section-header" style="margin-top: 2.5rem;">
+  <h2>Unsolved Problems</h2>
+  <span class="profile-section-hint">{{ unsolved_problems | length }} remaining</span>
+</div>
+{% if not solved_problems %}
+<p class="empty-state" style="margin-bottom: 1rem;">You haven't solved anything yet — <a href="/problems">start golfing!</a></p>
+{% endif %}
+<table class="table">
+  <thead>
+    <tr>
+      <th>Problem</th>
+      <th>Difficulty</th>
+      <th></th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for p in unsolved_problems %}
+    <tr class="unsolved-row">
+      <td><a href="/problems/{{ p.slug }}">{{ p.title }}</a></td>
+      <td><span class="badge badge-{{ p.difficulty }}">{{ p.difficulty }}</span></td>
+      <td class="unsolved-action"><a href="/problems/{{ p.slug }}" class="btn btn-sm">Try it →</a></td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+{% endif %}
+
+{% if not solved_problems and not unsolved_problems %}
+<p class="empty-state" style="margin-top: 2rem;">No problems published yet.</p>
+{% endif %}
+
+{% endblock %}

@@ -193,3 +193,49 @@ pre, code { font-family: 'Fira Code', 'Cascadia Code', monospace; font-size: 0.8
 /* Form hint text */
 .form-hint { font-size: 0.8rem; color: #64748b; margin-top: 0.25rem; margin-bottom: 0.4rem; }
 
+/* Profile page */
+.profile-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background: #0d1117;
+  border: 1px solid #1e293b;
+  border-radius: 10px;
+  padding: 1.5rem 1.75rem;
+  margin-bottom: 0.25rem;
+}
+.profile-username { font-size: 1.6rem; font-weight: 700; margin-bottom: 0.25rem; }
+.profile-since { color: #64748b; font-size: 0.875rem; }
+.profile-rank-badge { text-align: center; }
+.profile-rank-num { display: block; font-size: 2rem; font-weight: 800; color: #60a5fa; line-height: 1; }
+.profile-rank-label { font-size: 0.75rem; color: #64748b; text-transform: uppercase; letter-spacing: 0.05em; }
+.profile-stats { margin-top: 1rem; }
+.stat-value-muted { color: #475569; }
+.profile-section-header {
+  display: flex;
+  align-items: baseline;
+  gap: 0.75rem;
+  margin-top: 2rem;
+  margin-bottom: 0.75rem;
+}
+.profile-section-header h2 { font-size: 1.1rem; font-weight: 600; }
+.profile-section-hint { font-size: 0.8rem; color: #475569; }
+
+/* Gap indicators */
+.gap-none { color: #4ade80; font-weight: 600; }
+.gap-low  { color: #facc15; font-weight: 600; }
+.gap-mid  { color: #fb923c; font-weight: 600; }
+.gap-high { color: #f87171; font-weight: 600; }
+
+/* Problem rank display */
+.rank-pos { font-family: monospace; font-size: 0.875rem; font-weight: 600; }
+.rank-total { color: #475569; font-weight: 400; }
+
+/* Byte value */
+.byte-val { font-size: 0.85rem; }
+
+/* Unsolved rows */
+.unsolved-row td { color: #64748b; }
+.unsolved-row a { color: #60a5fa; }
+.unsolved-action { text-align: right; }
+

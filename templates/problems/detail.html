@@ -92,8 +92,24 @@ require(['vs/editor/editor.main'], function () {
     ? monacoLangFor(langSelect.options[langSelect.selectedIndex].text)
     : 'plaintext';
 
+  const PROBLEM_SLUG = '{{ problem.slug }}';
+
+  function storageKey(langId) {
+    return `code-golf:${PROBLEM_SLUG}:${langId}`;
+  }
+
+  function savedCode() {
+    const id = langSelect ? langSelect.value : '';
+    return localStorage.getItem(storageKey(id)) ?? '';
+  }
+
+  function saveCode(value) {
+    const id = langSelect ? langSelect.value : '';
+    localStorage.setItem(storageKey(id), value);
+  }
+
   const editor = monaco.editor.create(document.getElementById('monaco-container'), {
-    value: '',
+    value: savedCode(),
     language: initialLang,
     theme: 'vs-dark',
     minimap: { enabled: false },
@@ -104,14 +120,25 @@ require(['vs/editor/editor.main'], function () {
   });
 
   const byteCount = document.getElementById('byte-count');
-  editor.onDidChangeModelContent(() => {
+
+  function updateByteCount() {
     const trimmed = editor.getValue().replace(/[\r\n]+$/, '');
     byteCount.textContent = trimmed.length + ' bytes';
+  }
+
+  updateByteCount();
+
+  editor.onDidChangeModelContent(() => {
+    updateByteCount();
+    saveCode(editor.getValue());
   });
 
   langSelect?.addEventListener('change', () => {
+    saveCode(editor.getValue());
     const lang = monacoLangFor(langSelect.options[langSelect.selectedIndex].text);
     monaco.editor.setModelLanguage(editor.getModel(), lang);
+    editor.setValue(savedCode());
+    updateByteCount();
   });
 
   // Sync editor content into the hidden textarea before HTMX sends the form

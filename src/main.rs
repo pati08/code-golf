@@ -5,6 +5,7 @@ mod config;
 mod db;
 mod error;
 mod problems;
+mod profile;
 mod runner;
 mod scoreboard;
 mod scoring;
@@ -46,6 +47,7 @@ async fn main() -> anyhow::Result<()> {
 
     // Session store
     let session_store = SqliteStore::new(pool.clone());
+    session_store.migrate().await?;
     let session_layer = SessionManagerLayer::new(session_store)
         .with_secure(false)
         .with_expiry(tower_sessions::Expiry::OnInactivity(time::Duration::days(

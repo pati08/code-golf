@@ -11,8 +11,8 @@ use tower_http::{compression::CompressionLayer, services::ServeDir, trace::Trace
 
 use crate::{
     admin::handlers as admin, auth::handlers as auth, config::Config, error::AppError,
-    problems::handlers as problems, runner::LanguageRegistry, scoreboard::handlers as scoreboard,
-    submissions::handlers as submissions,
+    problems::handlers as problems, profile, runner::LanguageRegistry,
+    scoreboard::handlers as scoreboard, submissions::handlers as submissions,
 };
 
 #[derive(Clone)]
@@ -39,6 +39,7 @@ pub fn create_router(state: AppState) -> Router {
     Router::new()
         // Public
         .route("/", get(problems::get_index))
+        .route("/profile", get(profile::get_profile))
         .route("/problems", get(problems::get_problems))
         .route("/problems/{slug}", get(problems::get_problem))
         .route("/problems/{slug}/submit", post(submissions::post_submit))
