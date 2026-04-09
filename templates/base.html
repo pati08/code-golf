@@ -40,5 +40,62 @@
   </footer>
 
   {% block extra_scripts %}{% endblock %}
+
+  <!-- Feedback modal container -->
+  <div id="feedback-modal-container"></div>
+
+  <!-- Floating feedback button -->
+  <button
+    id="feedback-button"
+    hx-get="/feedback/form"
+    hx-target="#feedback-modal-container"
+    hx-swap="innerHTML"
+    title="Send feedback"
+    aria-label="Send feedback"
+  >
+    💬
+  </button>
+
+  <style>
+    #feedback-button {
+      position: fixed;
+      bottom: 2rem;
+      right: 2rem;
+      width: 3.5rem;
+      height: 3.5rem;
+      border-radius: 50%;
+      background-color: #2563eb;
+      color: #fff;
+      border: 1px solid #1d4ed8;
+      font-size: 1.5rem;
+      cursor: pointer;
+      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+      transition: all 0.2s ease;
+      z-index: 999;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    #feedback-button:hover {
+      background-color: #1d4ed8;
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+      transform: scale(1.1);
+    }
+
+    #feedback-button:active {
+      transform: scale(0.95);
+    }
+
+    @media (max-width: 640px) {
+      #feedback-button {
+        bottom: 1rem;
+        right: 1rem;
+        width: 3rem;
+        height: 3rem;
+        font-size: 1.25rem;
+      }
+    }
+  </style>
 </body>
 </html>

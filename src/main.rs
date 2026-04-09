@@ -4,6 +4,7 @@ mod auth;
 mod config;
 mod db;
 mod error;
+mod feedback;
 mod problems;
 mod profile;
 mod runner;

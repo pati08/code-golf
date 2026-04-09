@@ -12,7 +12,7 @@ use tower_http::{compression::CompressionLayer, services::ServeDir, trace::Trace
 
 use crate::{
     admin::handlers as admin, auth::handlers as auth, config::Config, error::AppError,
-    problems::handlers as problems, profile, runner::LanguageRegistry,
+    feedback::handlers as feedback, problems::handlers as problems, profile, runner::LanguageRegistry,
     scoreboard::handlers as scoreboard, submissions::handlers as submissions,
 };
 
@@ -86,6 +86,9 @@ pub fn create_router(state: AppState) -> Router {
             "/problems/{slug}/scoreboard",
             get(scoreboard::get_problem_scoreboard),
         )
+        // Feedback
+        .route("/feedback/form", get(feedback::get_feedback_form))
+        .route("/feedback", post(feedback::post_feedback))
         // Auth
         .route(
             "/register",
@@ -119,6 +122,11 @@ pub fn create_router(state: AppState) -> Router {
         .route(
             "/admin/users/{id}/toggle-admin",
             post(admin::post_toggle_admin),
+        )
+        .route("/admin/feedback", get(admin::get_admin_feedback))
+        .route(
+            "/admin/feedback/{id}/status",
+            post(admin::post_feedback_status),
         )
         // Static files
         .nest_service("/static", ServeDir::new("static"))

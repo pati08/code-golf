@@ -1,0 +1,96 @@
+{% extends "base.html" %}
+{% block title %}Admin: Feedback — Code Golf{% endblock %}
+{% block content %}
+<div>
+  <h1 style="margin-bottom: 1.5rem;">User Feedback</h1>
+
+  {% if feedback | length == 0 %}
+  <p class="empty-state">No feedback yet.</p>
+  {% else %}
+  <div style="overflow-x: auto;">
+    <table class="table">
+      <thead>
+        <tr>
+          <th>Date</th>
+          <th>User</th>
+          <th>Category</th>
+          <th>Subject</th>
+          <th>Message</th>
+          <th>Status</th>
+          <th>Actions</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for f in feedback %}
+        <tr>
+          <td style="white-space: nowrap; font-size: 0.85rem; color: #64748b;">{{ f.created_at[:10] }}</td>
+          <td style="white-space: nowrap;">
+            {% if f.user_id %}
+              <a href="/admin/users">{{ f.username }}</a>
+            {% else %}
+              <span style="color: #475569; font-style: italic;">{{ f.username }}</span>
+            {% endif %}
+          </td>
+          <td>
+            <span class="category-badge category-{{ f.category }}">{{ f.category }}</span>
+          </td>
+          <td style="min-width: 140px;">{{ f.subject }}</td>
+          <td style="max-width: 360px;">
+            <span style="display: block; color: #94a3b8; font-size: 0.875rem; margin-bottom: 0.25rem;">{{ f.message[:80] }}{% if f.message | length > 80 %}…{% endif %}</span>
+            <details>
+              <summary style="cursor: pointer; color: #60a5fa; font-size: 0.8rem; user-select: none;">View full</summary>
+              <p style="margin: 0.5rem 0; padding: 0.5rem; background: #0a0e17; border-left: 2px solid #334155; white-space: pre-wrap; word-break: break-word; font-size: 0.85rem; color: #e2e8f0;">{{ f.message }}</p>
+              {% if f.page_url %}
+              <p style="font-size: 0.8rem; color: #64748b; margin-top: 0.25rem;">From: <a href="{{ f.page_url }}" target="_blank">{{ f.page_url }}</a></p>
+              {% endif %}
+            </details>
+          </td>
+          <td style="white-space: nowrap;">
+            <span class="status-badge status-fb-{{ f.status }}">{{ f.status }}</span>
+          </td>
+          <td style="white-space: nowrap;">
+            <form method="post" action="/admin/feedback/{{ f.id }}/status" style="display: inline-flex; gap: 0.4rem;">
+              {% if f.status == "new" %}
+              <button type="submit" name="status" value="read" class="btn btn-sm">Mark Read</button>
+              {% endif %}
+              {% if f.status != "archived" %}
+              <button type="submit" name="status" value="archived" class="btn btn-sm">Archive</button>
+              {% endif %}
+            </form>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% endif %}
+</div>
+
+<style>
+.category-badge {
+  display: inline-block;
+  padding: 0.2rem 0.55rem;
+  border-radius: 999px;
+  font-size: 0.72rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+.category-bug      { background: #1c0a0a; color: #f87171; }
+.category-feature  { background: #052e16; color: #4ade80; }
+.category-general  { background: #0c1a2e; color: #60a5fa; }
+.category-other    { background: #1e0a2e; color: #c084fc; }
+
+.status-badge {
+  display: inline-block;
+  padding: 0.2rem 0.55rem;
+  border-radius: 4px;
+  font-size: 0.72rem;
+  font-weight: 700;
+  text-transform: uppercase;
+}
+.status-fb-new      { background: #1c0a0a; color: #f87171; }
+.status-fb-read     { background: #1c1917; color: #fb923c; }
+.status-fb-archived { background: #1e293b; color: #64748b; }
+</style>
+{% endblock %}

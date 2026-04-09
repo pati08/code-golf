@@ -1,0 +1,120 @@
+<div id="feedback-modal" class="modal-overlay">
+  <div class="modal-content">
+    <div class="modal-header">
+      <h2>Send Feedback</h2>
+      <button type="button" class="modal-close" onclick="document.getElementById('feedback-modal-container').innerHTML = ''">×</button>
+    </div>
+
+    {% if error %}
+    <div class="alert alert-error">{{ error }}</div>
+    {% endif %}
+
+    <form hx-post="/feedback" hx-target="#feedback-modal" hx-swap="innerHTML">
+      <div class="form-group">
+        <label for="category">Category</label>
+        <select id="category" name="category" required>
+          <option value="bug" {% if category == "bug" %}selected{% endif %}>Bug Report</option>
+          <option value="feature" {% if category == "feature" %}selected{% endif %}>Feature Request</option>
+          <option value="general" {% if category == "general" %}selected{% endif %}>General Feedback</option>
+          <option value="other" {% if category == "other" %}selected{% endif %}>Other</option>
+        </select>
+      </div>
+
+      <div class="form-group">
+        <label for="subject">Subject</label>
+        <input type="text" id="subject" name="subject" required maxlength="200" value="{{ subject or '' }}">
+        <small class="form-hint">Max 200 characters</small>
+      </div>
+
+      <div class="form-group">
+        <label for="message">Message</label>
+        <textarea id="message" name="message" rows="6" required minlength="10">{{ message or '' }}</textarea>
+        <small class="form-hint">Min 10 characters</small>
+      </div>
+
+      <input type="hidden" name="page_url" id="page_url">
+
+      <div class="modal-actions">
+        <button type="button" class="btn" onclick="document.getElementById('feedback-modal-container').innerHTML = ''">Cancel</button>
+        <button type="submit" class="btn btn-primary">Send Feedback</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<style>
+.modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: rgba(0, 0, 0, 0.6);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+}
+
+.modal-content {
+  background: #0d1117;
+  border: 1px solid #1e293b;
+  border-radius: 8px;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
+  max-width: 500px;
+  width: 90%;
+  max-height: 90vh;
+  overflow-y: auto;
+}
+
+.modal-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 1.25rem 1.5rem;
+  border-bottom: 1px solid #1e293b;
+}
+
+.modal-header h2 {
+  margin: 0;
+  font-size: 1.25rem;
+  color: #f1f5f9;
+}
+
+.modal-close {
+  background: none;
+  border: none;
+  font-size: 1.5rem;
+  cursor: pointer;
+  padding: 0;
+  width: 2rem;
+  height: 2rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #64748b;
+  border-radius: 4px;
+}
+
+.modal-close:hover {
+  color: #e2e8f0;
+  background: #1e293b;
+}
+
+.modal-content > form {
+  padding: 1.25rem 1.5rem;
+}
+
+.modal-actions {
+  display: flex;
+  gap: 0.5rem;
+  justify-content: flex-end;
+  padding-top: 1rem;
+  border-top: 1px solid #1e293b;
+  margin-top: 0.5rem;
+}
+</style>
+
+<script>
+document.getElementById('page_url').value = window.location.href;
+</script>

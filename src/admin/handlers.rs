@@ -386,3 +386,53 @@ pub async fn post_toggle_admin(
         .await?;
     Ok(Redirect::to("/admin/users"))
 }
+
+pub async fn get_admin_feedback(
+    State(state): State<AppState>,
+    RequiredAdmin(admin): RequiredAdmin,
+) -> Result<Html<String>, AppError> {
+    let rows = sqlx::query(
+        "SELECT f.id, f.user_id, COALESCE(u.username, 'Anonymous') as username, f.category, f.subject, f.message, f.page_url, f.status, f.created_at FROM feedback f LEFT JOIN users u ON f.user_id = u.id ORDER BY f.created_at DESC",
+    )
+    .fetch_all(&state.db)
+    .await?;
+
+    let feedback: Vec<_> = rows
+        .iter()
+        .map(|r| {
+            minijinja::context! {
+                id => r.get::<i64, _>("id"),
+                user_id => r.get::<Option<i64>, _>("user_id"),
+                username => r.get::<String, _>("username"),
+                category => r.get::<String, _>("category"),
+                subject => r.get::<String, _>("subject"),
+                message => r.get::<String, _>("message"),
+                page_url => r.get::<Option<String>, _>("page_url"),
+                status => r.get::<String, _>("status"),
+                created_at => r.get::<String, _>("created_at"),
+            }
+        })
+        .collect();
+
+    let ctx = minijinja::context! { feedback, current_user => admin_ctx(&admin) };
+    crate::app::render(&state.templates, "admin/feedback/list.html", ctx)
+}
+
+pub async fn post_feedback_status(
+    State(state): State<AppState>,
+    Path(id): Path<i64>,
+    RequiredAdmin(_admin): RequiredAdmin,
+    Form(form): Form<StatusUpdateForm>,
+) -> Result<Redirect, AppError> {
+    sqlx::query("UPDATE feedback SET status = ? WHERE id = ?")
+        .bind(&form.status)
+        .bind(id)
+        .execute(&state.db)
+        .await?;
+    Ok(Redirect::to("/admin/feedback"))
+}
+
+#[derive(Deserialize)]
+pub struct StatusUpdateForm {
+    pub status: String,
+}
