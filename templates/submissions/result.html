@@ -13,9 +13,50 @@
     {% if submission.judged_at %}<tr><th>Judged</th><td>{{ submission.judged_at }}</td></tr>{% endif %}
   </table>
 
-  {% if submission.error_output %}
+  {% if submission.wrong_answer_input or submission.wrong_answer_expected or submission.wrong_answer_actual %}
+  <h3>Test case details</h3>
+  <div class="example-container">
+    <div class="example-section">
+      <div class="example-label">Input</div>
+      <pre class="example-code">{{ submission.wrong_answer_input }}</pre>
+    </div>
+    <div class="example-section">
+      <div class="example-label">Expected output</div>
+      <pre class="example-code">{{ submission.wrong_answer_expected }}</pre>
+    </div>
+    <div class="example-section">
+      <div class="example-label">Your output</div>
+      <pre class="example-code wa-actual">{{ submission.wrong_answer_actual }}</pre>
+    </div>
+  </div>
+  {% elif submission.error_output %}
   <h3>Output</h3>
+  {% if submission.formatted_error_output %}
+  <div class="error-view">
+    <label class="format-toggle">
+      <input type="checkbox" onchange="
+        var v = this.closest('.error-view');
+        v.querySelector('.formatted-err').style.display = this.checked ? 'none' : '';
+        v.querySelector('.raw-err').style.display = this.checked ? '' : 'none';
+      ">
+      Show original (unformatted)
+    </label>
+    <div class="formatted-err">
+      <pre class="error-output">{{ submission.formatted_error_output }}</pre>
+      {% if submission.formatted_code %}
+      <details class="formatted-code-details">
+        <summary>Formatted code</summary>
+        <pre class="error-output">{{ submission.formatted_code }}</pre>
+      </details>
+      {% endif %}
+    </div>
+    <div class="raw-err" style="display:none">
+      <pre class="error-output">{{ submission.error_output }}</pre>
+    </div>
+  </div>
+  {% else %}
   <pre class="error-output">{{ submission.error_output }}</pre>
+  {% endif %}
   {% endif %}
 
   <div class="back-links">

@@ -7,10 +7,55 @@
     <span class="submission-bytes">{{ submission.byte_count }} bytes</span>
     <span class="submission-lang">{{ submission.language_name }}</span>
   </div>
-  {% if submission.error_output %}
+  {% if submission.wrong_answer_input or submission.wrong_answer_expected or submission.wrong_answer_actual %}
+  <details class="error-details" open>
+    <summary>Test case details</summary>
+    <div class="wa-details">
+      <div class="example-container">
+        <div class="example-section">
+          <div class="example-label">Input</div>
+          <pre class="example-code">{{ submission.wrong_answer_input }}</pre>
+        </div>
+        <div class="example-section">
+          <div class="example-label">Expected output</div>
+          <pre class="example-code">{{ submission.wrong_answer_expected }}</pre>
+        </div>
+        <div class="example-section">
+          <div class="example-label">Your output</div>
+          <pre class="example-code wa-actual">{{ submission.wrong_answer_actual }}</pre>
+        </div>
+      </div>
+    </div>
+  </details>
+  {% elif submission.error_output %}
   <details class="error-details">
     <summary>Details</summary>
+    {% if submission.formatted_error_output %}
+    <div class="error-view" id="error-view-{{ submission.id }}">
+      <label class="format-toggle">
+        <input type="checkbox" onchange="
+          var v = this.closest('.error-view');
+          v.querySelector('.formatted-err').style.display = this.checked ? 'none' : '';
+          v.querySelector('.raw-err').style.display = this.checked ? '' : 'none';
+        ">
+        Show original (unformatted)
+      </label>
+      <div class="formatted-err">
+        <pre class="error-output">{{ submission.formatted_error_output }}</pre>
+        {% if submission.formatted_code %}
+        <details class="formatted-code-details">
+          <summary>Formatted code</summary>
+          <pre class="error-output">{{ submission.formatted_code }}</pre>
+        </details>
+        {% endif %}
+      </div>
+      <div class="raw-err" style="display:none">
+        <pre class="error-output">{{ submission.error_output }}</pre>
+      </div>
+    </div>
+    {% else %}
     <pre class="error-output">{{ submission.error_output }}</pre>
+    {% endif %}
   </details>
   {% endif %}
   <div class="submission-links">

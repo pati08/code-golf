@@ -96,6 +96,16 @@ require(['vs/editor/editor.main'], function () {
   }
 
   const langSelect = document.getElementById('language-select');
+
+  // Load and restore previously selected language
+  const lastLangId = localStorage.getItem('code-golf:last-language');
+  if (lastLangId && langSelect) {
+    const option = Array.from(langSelect.options).find(opt => opt.value === lastLangId);
+    if (option) {
+      langSelect.value = lastLangId;
+    }
+  }
+
   const initialLang = langSelect
     ? monacoLangFor(langSelect.options[langSelect.selectedIndex].text)
     : 'plaintext';
@@ -116,6 +126,8 @@ require(['vs/editor/editor.main'], function () {
     localStorage.setItem(storageKey(id), value);
   }
 
+  let currentLangId = langSelect ? langSelect.value : '';
+
   const editor = monaco.editor.create(document.getElementById('monaco-container'), {
     value: savedCode(),
     language: initialLang,
@@ -125,7 +137,11 @@ require(['vs/editor/editor.main'], function () {
     lineNumbers: 'on',
     scrollBeyondLastLine: false,
     automaticLayout: true,
+    insertSpaces: false,
+    detectIndentation: false,
   });
+
+  editor.getAction('editor.action.indentationToTabs').run();
 
   const byteCount = document.getElementById('byte-count');
 
@@ -142,10 +158,15 @@ require(['vs/editor/editor.main'], function () {
   });
 
   langSelect?.addEventListener('change', () => {
-    saveCode(editor.getValue());
+    // Save current code under the OLD language before switching
+    localStorage.setItem(storageKey(currentLangId), editor.getValue());
+    // Update to new language
+    currentLangId = langSelect.value;
+    localStorage.setItem('code-golf:last-language', currentLangId);
     const lang = monacoLangFor(langSelect.options[langSelect.selectedIndex].text);
     monaco.editor.setModelLanguage(editor.getModel(), lang);
     editor.setValue(savedCode());
+    editor.getAction('editor.action.indentationToTabs').run();
     updateByteCount();
   });
 

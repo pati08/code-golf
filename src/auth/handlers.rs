@@ -9,7 +9,7 @@ use argon2::{
 use axum::{
     Form, debug_handler,
     extract::State,
-    response::{Html, Redirect},
+    response::{Html, Redirect, IntoResponse},
 };
 use rand::Rng;
 use serde::Deserialize;
@@ -45,11 +45,12 @@ pub async fn post_register(
     State(state): State<AppState>,
     session: Session,
     Form(form): Form<RegisterForm>,
-) -> Result<Redirect, AppError> {
+) -> Result<axum::response::Response, AppError> {
     if form.username.trim().is_empty() || form.password.len() < 6 {
-        return Err(AppError::BadRequest(
-            "Username required and password must be at least 6 characters".to_string(),
-        ));
+        let ctx = minijinja::context! {
+            error => "Username required and password must be at least 6 characters"
+        };
+        return Ok(crate::app::render(&state.templates, "auth/register.html", ctx)?.into_response());
     }
 
     let salt = {
@@ -61,7 +62,7 @@ pub async fn post_register(
     let argon2 = Argon2::default();
     let password_hash = argon2
         .hash_password(form.password.as_bytes(), &salt)
-        .map_err(|e| AppError::BadRequest(format!("Password hashing failed: {e}")))?
+        .map_err(|_| AppError::BadRequest("Password hashing failed".to_string()))?
         .to_string();
 
     // Check if this is the first user
@@ -89,11 +90,14 @@ pub async fn post_register(
                 is_admin: is_first_user,
             };
             set_session_user(&session, &user).await?;
-            Ok(Redirect::to("/"))
+            Ok(Redirect::to("/").into_response())
         }
-        Err(sqlx::Error::Database(e)) if e.message().contains("UNIQUE") => Err(
-            AppError::BadRequest("Username or email already taken".to_string()),
-        ),
+        Err(sqlx::Error::Database(e)) if e.message().contains("UNIQUE") => {
+            let ctx = minijinja::context! {
+                error => "Username or email already taken"
+            };
+            Ok(crate::app::render(&state.templates, "auth/register.html", ctx)?.into_response())
+        }
         Err(e) => Err(AppError::Database(e)),
     }
 }
@@ -107,7 +111,7 @@ pub async fn post_login(
     State(state): State<AppState>,
     session: Session,
     Form(form): Form<LoginForm>,
-) -> Result<Redirect, AppError> {
+) -> Result<axum::response::Response, AppError> {
     use sqlx::Row;
 
     let row =
@@ -119,9 +123,10 @@ pub async fn post_login(
     let row = match row {
         Some(r) => r,
         None => {
-            return Err(AppError::BadRequest(
-                "Invalid username or password".to_string(),
-            ));
+            let ctx = minijinja::context! {
+                error => "Invalid username or password"
+            };
+            return Ok(crate::app::render(&state.templates, "auth/login.html", ctx)?.into_response());
         }
     };
 
@@ -138,9 +143,10 @@ pub async fn post_login(
         .verify_password(form.password.as_bytes(), &parsed_hash)
         .is_err()
     {
-        return Err(AppError::BadRequest(
-            "Invalid username or password".to_string(),
-        ));
+        let ctx = minijinja::context! {
+            error => "Invalid username or password"
+        };
+        return Ok(crate::app::render(&state.templates, "auth/login.html", ctx)?.into_response());
     }
 
     let current_user = CurrentUser {
@@ -149,7 +155,7 @@ pub async fn post_login(
         is_admin,
     };
     set_session_user(&session, &current_user).await?;
-    Ok(Redirect::to("/"))
+    Ok(Redirect::to("/").into_response())
 }
 
 pub async fn post_logout(session: Session) -> Result<Redirect, AppError> {

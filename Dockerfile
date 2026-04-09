@@ -8,9 +8,9 @@ WORKDIR /code-golf
 
 # Install build dependencies
 RUN apt-get update && apt-get install -y \
-    clang \
-    mold \
-    && rm -rf /var/lib/apt/lists/*
+  clang \
+  mold \
+  && rm -rf /var/lib/apt/lists/*
 
 # ============ TOOLCHAIN & FETCH STAGE ============
 # Install nightly toolchain and pre-fetch all dependencies
@@ -33,10 +33,10 @@ COPY --from=planner /code-golf/recipe.json recipe.json
 
 # Build dependencies - all crates are already fetched, this just compiles them
 RUN if [ "$OPTIMIZE" = "true" ]; then \
-      cargo chef cook --release --recipe-path recipe.json; \
-    else \
-      cargo chef cook --recipe-path recipe.json; \
-    fi
+  cargo chef cook --release --recipe-path recipe.json; \
+  else \
+  cargo chef cook --recipe-path recipe.json; \
+  fi
 
 COPY . .
 
@@ -44,25 +44,30 @@ RUN touch src/main.rs
 
 # Build the application
 RUN if [ "$OPTIMIZE" = "true" ]; then \
-      cargo build --release --bin code-golf && \
-      cp target/release/code-golf /tmp/code-golf; \
-    else \
-      cargo build --bin code-golf && \
-      cp target/debug/code-golf /tmp/code-golf; \
-    fi
+  cargo build --release --bin code-golf && \
+  cp target/release/code-golf /tmp/code-golf; \
+  else \
+  cargo build --bin code-golf && \
+  cp target/debug/code-golf /tmp/code-golf; \
+  fi
 
 # ============ RUNTIME STAGE ============
 FROM debian:trixie-slim AS runtime
 WORKDIR /code-golf
 
 RUN apt-get update && apt-get install -y \
-    python3 \
-    bash \
-    ruby \
-    perl \
-    nodejs \
-    lua5.4 \
-    && rm -rf /var/lib/apt/lists/*
+  python3 \
+  black \
+  bash \
+  shfmt \
+  ruby \
+  perl \
+  perltidy \
+  nodejs \
+  npm \
+  lua5.4 \
+  && npm install -g prettier \
+  && rm -rf /var/lib/apt/lists/*
 
 COPY --from=builder /tmp/code-golf /usr/local/bin/code-golf
 COPY ./templates /code-golf/templates

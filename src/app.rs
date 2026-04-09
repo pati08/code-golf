@@ -2,8 +2,9 @@ use std::sync::{Arc, RwLock};
 
 use axum::{
     Router,
-    response::Html,
+    response::{Html, IntoResponse, Response},
     routing::{get, post},
+    http::StatusCode,
 };
 use minijinja::Environment;
 use sqlx::SqlitePool;
@@ -33,6 +34,38 @@ pub fn render(
     let tmpl = env.get_template(template)?;
     let rendered = tmpl.render(ctx)?;
     Ok(Html(rendered))
+}
+
+async fn handle_404() -> Response {
+    let html = r#"<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>404 - Code Golf</title>
+  <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+  <nav class="navbar">
+    <div class="nav-brand"><a href="/">⛳ Code Golf</a></div>
+  </nav>
+
+  <main class="container">
+    <div class="error-container">
+      <div class="error-code">404</div>
+      <h1 class="error-title">Not Found</h1>
+      <p class="error-message">The page you're looking for doesn't exist.</p>
+      <p class="error-suggestion">Check the URL and try again, or return to the home page.</p>
+      <a href="/" class="btn btn-primary">Go Home</a>
+    </div>
+  </main>
+
+  <footer class="site-footer">
+    <p>Code Golf Platform</p>
+  </footer>
+</body>
+</html>"#;
+    (StatusCode::NOT_FOUND, Html(html)).into_response()
 }
 
 pub fn create_router(state: AppState) -> Router {
@@ -89,6 +122,7 @@ pub fn create_router(state: AppState) -> Router {
         )
         // Static files
         .nest_service("/static", ServeDir::new("static"))
+        .fallback(handle_404)
         .layer(TraceLayer::new_for_http())
         .layer(CompressionLayer::new())
         .with_state(state)

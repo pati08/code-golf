@@ -26,41 +26,98 @@ pub enum AppError {
 
 impl IntoResponse for AppError {
     fn into_response(self) -> Response {
-        let (status, message) = match &self {
-            AppError::NotFound => (StatusCode::NOT_FOUND, "Not Found".to_string()),
-            AppError::Unauthorized => (StatusCode::UNAUTHORIZED, "Unauthorized".to_string()),
-            AppError::Forbidden => (StatusCode::FORBIDDEN, "Forbidden".to_string()),
-            AppError::BadRequest(msg) => (StatusCode::BAD_REQUEST, msg.clone()),
+        let (status, title, message, suggestion) = match &self {
+            AppError::NotFound => (
+                StatusCode::NOT_FOUND,
+                "Page Not Found",
+                "The resource you're looking for doesn't exist.",
+                Some("Check the URL and try again, or return to the home page."),
+            ),
+            AppError::Unauthorized => (
+                StatusCode::UNAUTHORIZED,
+                "Unauthorized",
+                "You need to be logged in to access this resource.",
+                Some("Please log in and try again."),
+            ),
+            AppError::Forbidden => (
+                StatusCode::FORBIDDEN,
+                "Access Denied",
+                "You don't have permission to access this resource.",
+                Some("If you believe this is an error, please contact support."),
+            ),
+            AppError::BadRequest(msg) => (
+                StatusCode::BAD_REQUEST,
+                "Bad Request",
+                msg.as_str(),
+                Some("Please check your input and try again."),
+            ),
             AppError::Database(e) => {
                 tracing::error!("Database error: {e}");
                 (
                     StatusCode::INTERNAL_SERVER_ERROR,
-                    "Internal Server Error".to_string(),
+                    "Database Error",
+                    "Something went wrong with the database.",
+                    Some("Please try again later."),
                 )
             }
             AppError::Template(e) => {
                 tracing::error!("Template error: {e}");
                 (
                     StatusCode::INTERNAL_SERVER_ERROR,
-                    "Internal Server Error".to_string(),
+                    "Rendering Error",
+                    "Something went wrong while rendering the page.",
+                    Some("Please try again later."),
                 )
             }
             AppError::Internal(e) => {
                 tracing::error!("Internal error: {e}");
                 (
                     StatusCode::INTERNAL_SERVER_ERROR,
-                    "Internal Server Error".to_string(),
+                    "Internal Server Error",
+                    "Something unexpected happened.",
+                    Some("Please try again later."),
                 )
             }
         };
-        (
-            status,
-            Html(format!(
-                "<h1>{}</h1><p>{}</p>",
-                status.as_u16(),
-                message
-            )),
-        )
-            .into_response()
+
+        let html = format!(
+            r#"<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>{} - Code Golf</title>
+  <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+  <nav class="navbar">
+    <div class="nav-brand"><a href="/">⛳ Code Golf</a></div>
+  </nav>
+
+  <main class="container">
+    <div class="error-container">
+      <div class="error-code">{}</div>
+      <h1 class="error-title">{}</h1>
+      <p class="error-message">{}</p>
+      {}
+      <a href="/" class="btn btn-primary">Go Home</a>
+    </div>
+  </main>
+
+  <footer class="site-footer">
+    <p>Code Golf Platform</p>
+  </footer>
+</body>
+</html>"#,
+            status.as_u16(),
+            status.as_u16(),
+            title,
+            message,
+            suggestion
+                .map(|s| format!(r#"<p class="error-suggestion">{}</p>"#, s))
+                .unwrap_or_default()
+        );
+
+        (status, Html(html)).into_response()
     }
 }

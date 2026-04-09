@@ -1,6 +1,47 @@
 use std::time::{Duration, Instant};
 use tokio::{io::AsyncWriteExt, process::Command, time::timeout};
 
+/// Returns the stdin→stdout formatter command for a given file extension, if one exists.
+fn formatter_for(file_extension: &str) -> Option<&'static [&'static str]> {
+    match file_extension {
+        "py" => Some(&["black", "--quiet", "-"]),
+        "sh" => Some(&["shfmt", "-"]),
+        "js" => Some(&["prettier", "--stdin-filepath", "solution.js"]),
+        "pl" => Some(&["perltidy", "-"]),
+        _ => None,
+    }
+}
+
+/// Try to format `code` using the appropriate formatter for `file_extension`.
+/// Returns the formatted code on success, or `None` if no formatter exists or it fails.
+pub async fn format_code(file_extension: &str, code: &str) -> Option<String> {
+    let parts = formatter_for(file_extension)?;
+
+    let mut child = Command::new(parts[0])
+        .args(&parts[1..])
+        .stdin(std::process::Stdio::piped())
+        .stdout(std::process::Stdio::piped())
+        .stderr(std::process::Stdio::null())
+        .spawn()
+        .ok()?;
+
+    if let Some(mut stdin) = child.stdin.take() {
+        let _ = stdin.write_all(code.as_bytes()).await;
+    }
+
+    let output = timeout(Duration::from_secs(10), child.wait_with_output())
+        .await
+        .ok()?
+        .ok()?;
+
+    if output.status.success() {
+        let formatted = String::from_utf8_lossy(&output.stdout).into_owned();
+        if formatted.trim().is_empty() { None } else { Some(formatted) }
+    } else {
+        None
+    }
+}
+
 #[derive(Debug)]
 pub struct ExecutionResult {
     pub stdout: String,

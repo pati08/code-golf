@@ -1,24 +1,74 @@
 {% extends "base.html" %}
 {% block title %}Scoreboard — Code Golf{% endblock %}
 {% block content %}
-<h1>Global Scoreboard</h1>
-{% if entries %}
-<table class="table">
-  <thead>
-    <tr><th>#</th><th>User</th><th>Solved</th><th>Total Bytes</th></tr>
-  </thead>
-  <tbody>
-    {% for e in entries %}
-    <tr class="{% if loop.index == 1 %}rank-gold{% elif loop.index == 2 %}rank-silver{% elif loop.index == 3 %}rank-bronze{% endif %}">
-      <td>{{ loop.index }}</td>
-      <td>{{ e.username }}</td>
-      <td>{{ e.solved_count }}</td>
-      <td>{{ e.total_bytes }}</td>
-    </tr>
-    {% endfor %}
-  </tbody>
-</table>
-{% else %}
-<p class="empty-state">No submissions yet. Be the first to solve a problem!</p>
-{% endif %}
+<div class="sb-page">
+  <h1 class="sb-title">Scoreboard</h1>
+
+  <div class="sb-layout">
+    {% if problems %}
+    <section class="sb-section sb-section-problems">
+      <h2 class="sb-section-title">Problems</h2>
+      <div class="sb-problem-grid">
+        {% for p in problems %}
+        <a class="sb-problem-card" href="/problems/{{ p.slug }}/scoreboard">
+          <div class="sb-problem-header">
+            <span class="badge badge-{{ p.difficulty }}">{{ p.difficulty }}</span>
+            <span class="sb-solver-count">{{ p.solver_count }} solver{% if p.solver_count != 1 %}s{% endif %}</span>
+          </div>
+          <div class="sb-problem-name">{{ p.title }}</div>
+          <div class="sb-problem-stats">
+            {% if p.best_bytes %}
+            <span class="sb-stat"><span class="sb-stat-lbl">Best</span> {{ p.best_bytes }}B</span>
+            <span class="sb-stat-sep">·</span>
+            <span class="sb-stat"><span class="sb-stat-lbl">Avg</span> {{ p.avg_bytes }}B</span>
+            {% else %}
+            <span class="sb-no-solvers">No submissions yet</span>
+            {% endif %}
+          </div>
+        </a>
+        {% endfor %}
+      </div>
+    </section>
+    {% endif %}
+
+    <section class="sb-section sb-section-leaderboard">
+      <h2 class="sb-section-title">Leaderboard</h2>
+      {% if entries %}
+      <div class="sb-leaderboard">
+        {% for e in entries %}
+        <div class="sb-entry {% if loop.index == 1 %}sb-entry-1st{% elif loop.index == 2 %}sb-entry-2nd{% elif loop.index == 3 %}sb-entry-3rd{% endif %}">
+          <div class="sb-entry-rank">{{ loop.index }}</div>
+          <div class="sb-entry-main">
+            <div class="sb-entry-name">{{ e.username }}</div>
+            <div class="sb-entry-stats">
+              <span class="sb-entry-stat">
+                <span class="sb-stat-val">{{ e.solved_count }}</span>
+                <span class="sb-stat-lbl">Solved</span>
+              </span>
+              <span class="sb-entry-stat-sep"></span>
+              <span class="sb-entry-stat">
+                <span class="sb-stat-val">{{ e.avg_bytes }}</span>
+                <span class="sb-stat-lbl">Avg Bytes</span>
+              </span>
+              <span class="sb-entry-stat-sep"></span>
+              <span class="sb-entry-stat">
+                <span class="sb-stat-val">{{ e.total_bytes }}</span>
+                <span class="sb-stat-lbl">Total Bytes</span>
+              </span>
+            </div>
+          </div>
+          <div class="sb-entry-difficulty">
+            {% if e.easy_count > 0 %}<span class="sb-diff-count sb-diff-easy">{{ e.easy_count }}E</span>{% endif %}
+            {% if e.medium_count > 0 %}<span class="sb-diff-count sb-diff-medium">{{ e.medium_count }}M</span>{% endif %}
+            {% if e.hard_count > 0 %}<span class="sb-diff-count sb-diff-hard">{{ e.hard_count }}H</span>{% endif %}
+          </div>
+        </div>
+        {% endfor %}
+      </div>
+      {% else %}
+      <p class="empty-state">No submissions yet. Be the first to solve a problem!</p>
+      {% endif %}
+    </section>
+  </div>
+</div>
 {% endblock %}

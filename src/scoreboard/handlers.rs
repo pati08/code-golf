@@ -11,9 +11,16 @@ pub async fn get_global_scoreboard(
     OptionalUser(user): OptionalUser,
 ) -> Result<Html<String>, AppError> {
     let rows = sqlx::query(
-        r#"SELECT u.username, SUM(bs.byte_count) as total_bytes, COUNT(DISTINCT bs.problem_id) as solved_count
+        r#"SELECT u.username,
+               SUM(bs.byte_count) as total_bytes,
+               COUNT(DISTINCT bs.problem_id) as solved_count,
+               CAST(ROUND(SUM(bs.byte_count) * 1.0 / COUNT(DISTINCT bs.problem_id)) AS INTEGER) as avg_bytes,
+               SUM(CASE WHEN p.difficulty = 'easy' THEN 1 ELSE 0 END) as easy_count,
+               SUM(CASE WHEN p.difficulty = 'medium' THEN 1 ELSE 0 END) as medium_count,
+               SUM(CASE WHEN p.difficulty = 'hard' THEN 1 ELSE 0 END) as hard_count
            FROM best_submissions bs
            JOIN users u ON u.id = bs.user_id
+           JOIN problems p ON p.id = bs.problem_id
            GROUP BY bs.user_id, u.username
            ORDER BY solved_count DESC, total_bytes ASC"#,
     )
@@ -27,11 +34,47 @@ pub async fn get_global_scoreboard(
                 username => r.get::<String, _>("username"),
                 total_bytes => r.get::<i64, _>("total_bytes"),
                 solved_count => r.get::<i64, _>("solved_count"),
+                avg_bytes => r.get::<i64, _>("avg_bytes"),
+                easy_count => r.get::<i64, _>("easy_count"),
+                medium_count => r.get::<i64, _>("medium_count"),
+                hard_count => r.get::<i64, _>("hard_count"),
             }
         })
         .collect();
 
-    let ctx = minijinja::context! { entries, current_user => user };
+    let problem_rows = sqlx::query(
+        r#"SELECT p.title, p.slug, p.difficulty,
+               COUNT(bs.user_id) as solver_count,
+               MIN(bs.byte_count) as best_bytes,
+               CAST(ROUND(AVG(bs.byte_count)) AS INTEGER) as avg_bytes
+           FROM problems p
+           LEFT JOIN best_submissions bs ON bs.problem_id = p.id
+           WHERE p.is_published = 1
+           GROUP BY p.id
+           ORDER BY
+               CASE p.difficulty WHEN 'easy' THEN 0 WHEN 'medium' THEN 1 WHEN 'hard' THEN 2 ELSE 3 END,
+               p.title"#,
+    )
+    .fetch_all(&state.db)
+    .await?;
+
+    let problems: Vec<_> = problem_rows
+        .iter()
+        .map(|r| {
+            minijinja::context! {
+                title => r.get::<String, _>("title"),
+                slug => r.get::<String, _>("slug"),
+                difficulty => r.get::<String, _>("difficulty"),
+                solver_count => r.get::<i64, _>("solver_count"),
+                best_bytes => r.get::<Option<i64>, _>("best_bytes"),
+                avg_bytes => r.get::<Option<i64>, _>("avg_bytes"),
+            }
+        })
+        .collect();
+
+    let total_problems = problems.len();
+
+    let ctx = minijinja::context! { entries, problems, total_problems, current_user => user };
     crate::app::render(&state.templates, "scoreboard/global.html", ctx)
 }
 

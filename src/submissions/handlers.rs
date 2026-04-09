@@ -77,7 +77,7 @@ async fn fetch_submission_ctx(
     id: i64,
 ) -> Result<minijinja::value::Value, AppError> {
     let row = sqlx::query(
-        r#"SELECT s.id, s.status, s.byte_count, s.error_output, s.created_at, s.judged_at,
+        r#"SELECT s.id, s.status, s.byte_count, s.error_output, s.formatted_code, s.formatted_error_output, s.created_at, s.judged_at,
                u.username, p.title as problem_title, p.slug as problem_slug,
                l.display_name as language_name, p.par_byte_count
            FROM submissions s
@@ -94,6 +94,7 @@ async fn fetch_submission_ctx(
     let status = row.get::<String, _>("status");
     let byte_count = row.get::<i64, _>("byte_count");
     let par_byte_count = row.get::<Option<i64>, _>("par_byte_count");
+    let error_output = row.get::<Option<String>, _>("error_output");
 
     let par_score: Option<i32> = if status == "accepted" {
         par_byte_count.map(|p| crate::scoring::compute_par_score(byte_count, p))
@@ -102,11 +103,35 @@ async fn fetch_submission_ctx(
     };
     let par_score_name: Option<&str> = par_score.map(crate::scoring::par_score_name);
 
+    // For wrong_answer, error_output may contain JSON with sample test case details.
+    // Parse it into structured fields and don't expose the raw JSON to templates.
+    let (wa_input, wa_expected, wa_actual, display_error_output) =
+        if status == "wrong_answer" {
+            if let Some(ref s) = error_output {
+                if let Ok(v) = serde_json::from_str::<serde_json::Value>(s) {
+                    (
+                        v["input"].as_str().map(str::to_string),
+                        v["expected"].as_str().map(str::to_string),
+                        v["actual"].as_str().map(str::to_string),
+                        None::<String>,
+                    )
+                } else {
+                    (None, None, None, error_output.clone())
+                }
+            } else {
+                (None, None, None, None)
+            }
+        } else {
+            (None, None, None, error_output)
+        };
+
     Ok(minijinja::context! {
         id => row.get::<i64, _>("id"),
         status => &status,
         byte_count => byte_count,
-        error_output => row.get::<Option<String>, _>("error_output"),
+        error_output => display_error_output,
+        formatted_code => row.get::<Option<String>, _>("formatted_code"),
+        formatted_error_output => row.get::<Option<String>, _>("formatted_error_output"),
         created_at => row.get::<String, _>("created_at"),
         judged_at => row.get::<Option<String>, _>("judged_at"),
         username => row.get::<String, _>("username"),
@@ -115,6 +140,9 @@ async fn fetch_submission_ctx(
         language_name => row.get::<String, _>("language_name"),
         par_score => par_score,
         par_score_name => par_score_name,
+        wrong_answer_input => wa_input,
+        wrong_answer_expected => wa_expected,
+        wrong_answer_actual => wa_actual,
     })
 }
 
