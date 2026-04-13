@@ -1,0 +1,39 @@
+{% extends "base.html" %}
+{% block title %}API Key Created — Code Golf{% endblock %}
+{% block content %}
+<h1>API Key Created</h1>
+
+<div class="card" style="border: 2px solid var(--color-success, #22c55e)">
+  <h2 style="margin-top: 0">Copy your key now</h2>
+  <p>This is the only time <strong>{{ name }}</strong> will be shown. It cannot be recovered after leaving this page.</p>
+
+  <div style="display: flex; gap: 0.5rem; align-items: center; margin: 1rem 0">
+    <code id="api-key" style="
+      flex: 1;
+      padding: 0.75rem 1rem;
+      background: var(--color-bg-code, #1e1e1e);
+      border-radius: 6px;
+      font-size: 0.9rem;
+      word-break: break-all;
+    ">{{ token }}</code>
+    <button class="btn btn-sm" onclick="copyKey()">Copy</button>
+  </div>
+
+  <p class="muted" style="margin-bottom: 0">
+    Use this as an HTTP header: <code>Authorization: Bearer &lt;key&gt;</code>
+  </p>
+</div>
+
+<a href="/admin/api-keys" class="btn" style="margin-top: 1.5rem">Back to API Keys</a>
+
+<script>
+function copyKey() {
+  const key = document.getElementById('api-key').textContent;
+  navigator.clipboard.writeText(key).then(() => {
+    const btn = event.target;
+    btn.textContent = 'Copied!';
+    setTimeout(() => btn.textContent = 'Copy', 2000);
+  });
+}
+</script>
+{% endblock %}

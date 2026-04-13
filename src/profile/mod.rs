@@ -1,12 +1,59 @@
-use axum::{extract::State, response::Html};
+use axum::{
+    extract::{Query, State},
+    http::HeaderMap,
+    response::Html,
+};
+use serde::Deserialize;
 use sqlx::Row;
 
 use crate::{app::AppState, auth::RequiredUser, error::AppError};
 
+#[derive(Debug, Deserialize, Default)]
+pub struct ProfileParams {
+    #[serde(default)]
+    pub tournament: Option<String>,
+}
+
 pub async fn get_profile(
     State(state): State<AppState>,
     RequiredUser(user): RequiredUser,
+    Query(params): Query<ProfileParams>,
+    headers: HeaderMap,
 ) -> Result<Html<String>, AppError> {
+    // Fetch tournament list for selector
+    let t_rows = sqlx::query(
+        "SELECT slug, name, is_active FROM tournaments ORDER BY is_active DESC, name ASC",
+    )
+    .fetch_all(&state.db)
+    .await?;
+
+    let all_tournaments: Vec<_> = t_rows
+        .iter()
+        .map(|r| {
+            minijinja::context! {
+                slug => r.get::<String, _>("slug"),
+                name => r.get::<String, _>("name"),
+                is_active => r.get::<i64, _>("is_active") != 0,
+            }
+        })
+        .collect();
+
+    let cookie_tournament = crate::app::get_cookie(&headers, "selectedTournament");
+    let default_slug = sqlx::query("SELECT slug FROM tournaments ORDER BY created_at DESC LIMIT 1")
+        .fetch_optional(&state.db)
+        .await?
+        .map(|r| r.get::<String, _>("slug"));
+
+    // Determine effective tournament filter: query param > cookie > default
+    let filter_tournament = params.tournament.as_deref().unwrap_or("");
+    let effective_tournament = if !filter_tournament.is_empty() {
+        filter_tournament.to_string()
+    } else if let Some(ref c) = cookie_tournament {
+        c.clone()
+    } else {
+        default_slug.unwrap_or_else(|| "all".to_string())
+    };
+
     // Member since date
     let user_row = sqlx::query("SELECT created_at FROM users WHERE id = ?")
         .bind(user.id)
@@ -49,7 +96,13 @@ pub async fn get_profile(
     };
 
     // Per-problem breakdown sorted by: solved first, then gap desc, then title
-    let problem_rows = sqlx::query(
+    let tournament_clause = if effective_tournament == "all" {
+        ""
+    } else {
+        "JOIN tournaments t ON t.id = p.tournament_id AND t.slug = ?"
+    };
+
+    let sql = format!(
         r#"WITH user_best AS (
              SELECT problem_id, MIN(byte_count) AS min_bytes
              FROM best_submissions
@@ -83,6 +136,7 @@ pub async fn get_profile(
              COALESCE(ur.rank, 1) AS user_rank,
              COALESCE(sc.total, 0) AS total_solvers
            FROM problems p
+           {tournament_clause}
            LEFT JOIN user_best ub ON ub.problem_id = p.id
            LEFT JOIN global_best gb ON gb.problem_id = p.id
            LEFT JOIN user_rank ur ON ur.problem_id = p.id
@@ -91,11 +145,18 @@ pub async fn get_profile(
            ORDER BY
              CASE WHEN ub.min_bytes IS NOT NULL THEN 0 ELSE 1 END,
              (CAST(ub.min_bytes AS REAL) - CAST(gb.min_bytes AS REAL)) DESC,
-             p.title ASC"#,
-    )
-    .bind(user.id)
-    .fetch_all(&state.db)
-    .await?;
+             p.title ASC"#
+    );
+
+    let problem_rows = if effective_tournament == "all" {
+        sqlx::query(&sql).bind(user.id).fetch_all(&state.db).await?
+    } else {
+        sqlx::query(&sql)
+            .bind(user.id)
+            .bind(&effective_tournament)
+            .fetch_all(&state.db)
+            .await?
+    };
 
     let mut solved_problems = Vec::new();
     let mut unsolved_problems = Vec::new();
@@ -137,6 +198,34 @@ pub async fn get_profile(
         }
     }
 
+    // Per-tournament breakdown
+    let tournament_rows = sqlx::query(
+        r#"SELECT t.slug, t.name, t.is_active,
+               COUNT(DISTINCT bs.problem_id) as solved_count,
+               COALESCE(SUM(bs.byte_count), 0) as total_bytes
+           FROM tournaments t
+           LEFT JOIN problems p ON p.tournament_id = t.id AND p.is_published = 1
+           LEFT JOIN best_submissions bs ON bs.problem_id = p.id AND bs.user_id = ?
+           GROUP BY t.id, t.slug, t.name, t.is_active
+           ORDER BY t.is_active DESC, t.created_at DESC"#,
+    )
+    .bind(user.id)
+    .fetch_all(&state.db)
+    .await?;
+
+    let tournament_stats: Vec<_> = tournament_rows
+        .iter()
+        .map(|r| {
+            minijinja::context! {
+                slug => r.get::<String, _>("slug"),
+                name => r.get::<String, _>("name"),
+                is_active => r.get::<i64, _>("is_active") != 0,
+                solved_count => r.get::<i64, _>("solved_count"),
+                total_bytes => r.get::<i64, _>("total_bytes"),
+            }
+        })
+        .collect();
+
     let current_user_ctx = minijinja::context! {
         id => user.id,
         username => user.username.clone(),
@@ -153,6 +242,9 @@ pub async fn get_profile(
         },
         solved_problems,
         unsolved_problems,
+        tournament_stats,
+        all_tournaments,
+        filter_tournament => effective_tournament,
     };
 
     crate::app::render(&state.templates, "profile/index.html", ctx)

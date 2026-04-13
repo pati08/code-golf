@@ -4,16 +4,17 @@ use axum::{
     Router,
     response::{Html, IntoResponse, Response},
     routing::{get, post},
-    http::StatusCode,
+    http::{StatusCode, HeaderMap},
 };
 use minijinja::Environment;
 use sqlx::SqlitePool;
 use tower_http::{compression::CompressionLayer, services::ServeDir, trace::TraceLayer};
 
 use crate::{
-    admin::handlers as admin, auth::handlers as auth, config::Config, error::AppError,
-    feedback::handlers as feedback, problems::handlers as problems, profile, runner::LanguageRegistry,
-    scoreboard::handlers as scoreboard, submissions::handlers as submissions,
+    admin::{api as admin_api, handlers as admin}, auth::handlers as auth, config::Config,
+    error::AppError, feedback::handlers as feedback, problems::handlers as problems, profile,
+    runner::LanguageRegistry, scoreboard::handlers as scoreboard,
+    submissions::handlers as submissions, tournaments,
 };
 
 #[derive(Clone)]
@@ -34,6 +35,19 @@ pub fn render(
     let tmpl = env.get_template(template)?;
     let rendered = tmpl.render(ctx)?;
     Ok(Html(rendered))
+}
+
+pub fn get_cookie(headers: &HeaderMap, name: &str) -> Option<String> {
+    headers
+        .get("cookie")
+        .and_then(|v| v.to_str().ok())
+        .and_then(|cookies| {
+            cookies
+                .split(';')
+                .filter_map(|s| s.trim().split_once('='))
+                .find(|(k, _)| k.trim() == name)
+                .map(|(_, v)| v.trim().to_owned())
+        })
 }
 
 async fn handle_404() -> Response {
@@ -86,6 +100,7 @@ pub fn create_router(state: AppState) -> Router {
             "/problems/{slug}/scoreboard",
             get(scoreboard::get_problem_scoreboard),
         )
+        .route("/tournaments", get(tournaments::get_tournaments))
         // Feedback
         .route("/feedback/form", get(feedback::get_feedback_form))
         .route("/feedback", post(feedback::post_feedback))
@@ -127,6 +142,43 @@ pub fn create_router(state: AppState) -> Router {
         .route(
             "/admin/feedback/{id}/status",
             post(admin::post_feedback_status),
+        )
+        // Admin API keys
+        .route(
+            "/admin/api-keys",
+            get(admin::get_admin_api_keys).post(admin::post_create_api_key),
+        )
+        .route("/admin/api-keys/{id}/revoke", post(admin::post_revoke_api_key))
+        .route("/admin/api-keys/{id}/delete", post(admin::post_delete_api_key))
+        // Admin JSON API (bearer token auth)
+        .route(
+            "/api/admin/problems",
+            post(admin_api::post_api_create_problem),
+        )
+        .route(
+            "/api/admin/problems/{slug}/test-cases",
+            post(admin_api::post_api_add_test_case),
+        )
+        .route(
+            "/api/admin/problems/{slug}/publish",
+            post(admin_api::post_api_toggle_publish),
+        )
+        .route(
+            "/admin/tournaments",
+            get(admin::get_admin_tournaments).post(admin::post_create_tournament),
+        )
+        .route("/admin/tournaments/new", get(admin::get_new_tournament))
+        .route(
+            "/admin/tournaments/{slug}/edit",
+            get(admin::get_edit_tournament),
+        )
+        .route(
+            "/admin/tournaments/{slug}",
+            post(admin::post_update_tournament),
+        )
+        .route(
+            "/admin/tournaments/{slug}/set-active",
+            post(admin::post_set_active_tournament),
         )
         // Static files
         .nest_service("/static", ServeDir::new("static"))

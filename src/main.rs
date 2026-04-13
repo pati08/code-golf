@@ -11,6 +11,7 @@ mod runner;
 mod scoreboard;
 mod scoring;
 mod submissions;
+mod tournaments;
 
 use std::sync::{Arc, RwLock};
 

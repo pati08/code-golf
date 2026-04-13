@@ -4,12 +4,19 @@
 <h1>Problems <a href="/admin/problems/new" class="btn btn-primary btn-sm">+ New</a></h1>
 <table class="table">
   <thead>
-    <tr><th>Title</th><th>Difficulty</th><th>Published</th><th>Actions</th></tr>
+    <tr><th>Title</th><th>Tournament</th><th>Difficulty</th><th>Published</th><th>Actions</th></tr>
   </thead>
   <tbody>
     {% for p in problems %}
     <tr>
       <td><a href="/problems/{{ p.slug }}">{{ p.title }}</a></td>
+      <td>
+        {% if p.tournament_name %}
+        <a href="/admin/tournaments/{{ p.tournament_slug }}/edit">{{ p.tournament_name }}</a>
+        {% else %}
+        <span class="text-muted">—</span>
+        {% endif %}
+      </td>
       <td><span class="badge badge-{{ p.difficulty }}">{{ p.difficulty }}</span></td>
       <td>{% if p.is_published %}<span class="badge badge-success">Yes</span>{% else %}<span class="badge badge-muted">No</span>{% endif %}</td>
       <td class="actions">

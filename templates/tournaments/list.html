@@ -1,0 +1,36 @@
+{% extends "base.html" %}
+{% block title %}Tournaments — Code Golf{% endblock %}
+{% block content %}
+
+<h1>Tournaments</h1>
+
+{% if tournaments %}
+<div class="tournament-grid">
+  {% for t in tournaments %}
+  <div class="tournament-card">
+    <div class="tournament-card-header">
+      <span class="tournament-card-name">{{ t.name }}</span>
+      {% if t.is_active %}<span class="badge badge-success">Active</span>{% endif %}
+    </div>
+    {% if t.description %}
+    <p class="tournament-card-desc">{{ t.description }}</p>
+    {% endif %}
+    {% if t.start_date or t.end_date %}
+    <div class="tournament-card-dates">
+      {% if t.start_date %}<span>{{ t.start_date }}</span>{% endif %}
+      {% if t.start_date and t.end_date %} – {% endif %}
+      {% if t.end_date %}<span>{{ t.end_date }}</span>{% endif %}
+    </div>
+    {% endif %}
+    <div class="tournament-card-links">
+      <a href="/problems?tournament={{ t.slug }}" class="btn btn-sm btn-primary">Problems →</a>
+      <a href="/scoreboard?tournament={{ t.slug }}" class="btn btn-sm">Scoreboard →</a>
+    </div>
+  </div>
+  {% endfor %}
+</div>
+{% else %}
+<p class="empty-state">No tournaments yet.</p>
+{% endif %}
+
+{% endblock %}

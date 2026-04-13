@@ -366,5 +366,31 @@ pre, code { font-family: 'Fira Code', 'Cascadia Code', monospace; font-size: 0.8
 .filter-bar { display: flex; align-items: center; gap: 1.25rem; flex-wrap: wrap; }
 .filter-group { display: flex; align-items: center; gap: 0.35rem; }
 .filter-label { font-size: 0.75rem; color: #64748b; text-transform: uppercase; letter-spacing: 0.06em; margin-right: 0.25rem; }
+.filter-select { background: #1e293b; color: #e2e8f0; border: 1px solid #334155; border-radius: 6px; padding: 0.35rem 0.6rem; font-size: 0.875rem; cursor: pointer; }
+.filter-select:focus { outline: 2px solid #3b82f6; outline-offset: 2px; }
 .solved-check { color: #4ade80; font-weight: 700; font-size: 0.9rem; }
 
+
+/* Tournament pages */
+.tournament-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 1.25rem; margin-top: 1.5rem; }
+.tournament-card { display: block; background: #1e293b; border: 1px solid #334155; border-radius: 10px; padding: 1.25rem 1.5rem; color: inherit; }
+.tournament-card-links { display: flex; gap: 0.5rem; margin-top: 1rem; }
+.tournament-card-header { display: flex; align-items: center; justify-content: space-between; gap: 0.75rem; margin-bottom: 0.5rem; }
+.tournament-card-name { font-size: 1.1rem; font-weight: 700; color: #f1f5f9; }
+.tournament-card-desc { font-size: 0.9rem; color: #94a3b8; margin: 0.5rem 0 0; line-height: 1.5; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
+.tournament-card-dates { font-size: 0.8rem; color: #64748b; margin-top: 0.75rem; }
+
+.tournament-header { display: flex; align-items: flex-start; justify-content: space-between; gap: 1.5rem; flex-wrap: wrap; margin-bottom: 2rem; }
+.tournament-header h1 { font-size: 1.75rem; font-weight: 800; color: #f1f5f9; margin-bottom: 0.25rem; }
+.tournament-desc { color: #94a3b8; margin: 0.5rem 0 0; max-width: 60ch; }
+.tournament-dates { font-size: 0.85rem; color: #64748b; margin-top: 0.5rem; }
+.tournament-header-links { display: flex; gap: 0.5rem; flex-shrink: 0; }
+.tournament-layout { display: grid; grid-template-columns: 1fr 1fr; gap: 2rem; align-items: start; }
+.tournament-section h2 { font-size: 1.15rem; font-weight: 700; margin-bottom: 1rem; color: #e2e8f0; }
+@media (max-width: 768px) {
+  .tournament-layout { grid-template-columns: 1fr; }
+  .tournament-header { flex-direction: column; }
+}
+
+/* Active tournament row highlight */
+.active-tournament-row td { background: #0f2337; }

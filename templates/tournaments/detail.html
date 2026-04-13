@@ -1,0 +1,69 @@
+{% extends "base.html" %}
+{% block title %}{{ tournament.name }} — Code Golf{% endblock %}
+{% block content %}
+
+<div class="tournament-header">
+  <div>
+    <h1>{{ tournament.name }}
+      {% if tournament.is_active %}<span class="badge badge-success" style="vertical-align: middle; font-size: 0.75rem;">Active</span>{% endif %}
+    </h1>
+    {% if tournament.description %}
+    <p class="tournament-desc">{{ tournament.description }}</p>
+    {% endif %}
+    {% if tournament.start_date or tournament.end_date %}
+    <p class="tournament-dates">
+      {% if tournament.start_date %}{{ tournament.start_date }}{% endif %}
+      {% if tournament.start_date and tournament.end_date %} – {% endif %}
+      {% if tournament.end_date %}{{ tournament.end_date }}{% endif %}
+    </p>
+    {% endif %}
+  </div>
+  <div class="tournament-header-links">
+    <a href="/scoreboard?tournament={{ tournament.slug }}" class="btn btn-sm">Full Scoreboard →</a>
+    <a href="/problems?tournament={{ tournament.slug }}" class="btn btn-sm btn-primary">Problems →</a>
+  </div>
+</div>
+
+<div class="tournament-layout">
+  <section class="tournament-section">
+    <h2>Problems</h2>
+    {% if problems %}
+    <table class="table">
+      <thead><tr><th>Title</th><th>Difficulty</th></tr></thead>
+      <tbody>
+        {% for p in problems %}
+        <tr>
+          <td><a href="/problems/{{ p.slug }}">{{ p.title }}</a></td>
+          <td><span class="badge badge-{{ p.difficulty }}">{{ p.difficulty }}</span></td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    {% else %}
+    <p class="empty-state">No published problems in this tournament yet.</p>
+    {% endif %}
+  </section>
+
+  <section class="tournament-section">
+    <h2>Leaderboard</h2>
+    {% if entries %}
+    <table class="table">
+      <thead><tr><th>#</th><th>User</th><th>Solved</th><th>Total Bytes</th></tr></thead>
+      <tbody>
+        {% for e in entries %}
+        <tr>
+          <td><strong>{{ loop.index }}</strong></td>
+          <td>{{ e.username }}</td>
+          <td>{{ e.solved_count }}</td>
+          <td><code class="byte-val">{{ e.total_bytes }}B</code></td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    {% else %}
+    <p class="empty-state">No submissions yet.</p>
+    {% endif %}
+  </section>
+</div>
+
+{% endblock %}

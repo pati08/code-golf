@@ -34,6 +34,19 @@
   </div>
 </div>
 
+{% if all_tournaments | length > 1 %}
+<div style="margin: 1.5rem 0; padding: 1rem 0; border-top: 1px solid #334155;">
+  <label class="filter-label" for="profile-tournament-select">Tournament</label>
+  <select id="profile-tournament-select" class="tournament-select filter-select"
+          onchange="location.href='/profile?tournament='+this.value">
+    <option value="all"{% if filter_tournament == "all" %} selected{% endif %}>All Tournaments</option>
+    {% for t in all_tournaments %}
+    <option value="{{ t.slug }}"{% if filter_tournament == t.slug %} selected{% endif %}>{{ t.name }}{% if t.is_active %} ★{% endif %}</option>
+    {% endfor %}
+  </select>
+</div>
+{% endif %}
+
 {% if solved_problems %}
 <div class="profile-section-header">
   <h2>Solved Problems</h2>
@@ -109,6 +122,33 @@
 
 {% if not solved_problems and not unsolved_problems %}
 <p class="empty-state" style="margin-top: 2rem;">No problems published yet.</p>
+{% endif %}
+
+{% if tournament_stats | length > 1 %}
+<div class="profile-section-header" style="margin-top: 2.5rem;">
+  <h2>Tournament Breakdown</h2>
+</div>
+<table class="table">
+  <thead>
+    <tr>
+      <th>Tournament</th>
+      <th>Solved</th>
+      <th>Total Bytes</th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for t in tournament_stats %}
+    <tr{% if t.is_active %} class="active-tournament-row"{% endif %}>
+      <td>
+        <a href="/problems?tournament={{ t.slug }}">{{ t.name }}</a>
+        {% if t.is_active %}<span class="badge badge-success" style="margin-left: 0.5rem;">Active</span>{% endif %}
+      </td>
+      <td>{{ t.solved_count }}</td>
+      <td>{% if t.total_bytes > 0 %}{{ t.total_bytes }}B{% else %}<span class="text-muted">—</span>{% endif %}</td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
 {% endif %}
 
 {% endblock %}

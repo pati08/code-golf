@@ -1,0 +1,67 @@
+{% extends "base.html" %}
+{% block title %}Admin: API Keys — Code Golf{% endblock %}
+{% block content %}
+<h1>API Keys</h1>
+<p class="muted">Bearer tokens for programmatic access to admin APIs. Keys are shown only once at creation — store them securely.</p>
+
+<div class="card" style="margin-bottom: 2rem">
+  <h2 style="margin-top: 0">Create New Key</h2>
+  <form method="post" action="/admin/api-keys" class="form-row">
+    <div class="form-group" style="flex: 1">
+      <label for="name">Key Name</label>
+      <input type="text" id="name" name="name" placeholder="e.g. CI deploy script" required class="input">
+    </div>
+    <div class="form-group" style="align-self: flex-end">
+      <button type="submit" class="btn btn-primary">Generate Key</button>
+    </div>
+  </form>
+</div>
+
+{% if keys %}
+<table class="table">
+  <thead>
+    <tr>
+      <th>Name</th>
+      <th>Prefix</th>
+      <th>Created By</th>
+      <th>Created</th>
+      <th>Last Used</th>
+      <th>Status</th>
+      <th>Actions</th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for k in keys %}
+    <tr>
+      <td>{{ k.name }}</td>
+      <td><code>{{ k.prefix }}…</code></td>
+      <td>{{ k.created_by }}</td>
+      <td>{{ k.created_at }}</td>
+      <td>{{ k.last_used_at | default("Never") }}</td>
+      <td>
+        {% if k.is_active %}
+        <span class="badge badge-success">Active</span>
+        {% else %}
+        <span class="badge badge-muted">Revoked</span>
+        {% endif %}
+      </td>
+      <td class="actions">
+        {% if k.is_active %}
+        <form method="post" action="/admin/api-keys/{{ k.id }}/revoke" style="display:inline"
+              onsubmit="return confirm('Revoke this key? Any scripts using it will stop working.')">
+          <button class="btn btn-sm btn-danger">Revoke</button>
+        </form>
+        {% endif %}
+        <form method="post" action="/admin/api-keys/{{ k.id }}/delete" style="display:inline"
+              onsubmit="return confirm('Permanently delete this key record?')">
+          <button class="btn btn-sm">Delete</button>
+        </form>
+      </td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+{% else %}
+<p class="muted">No API keys yet.</p>
+{% endif %}
+{% endblock %}

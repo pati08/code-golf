@@ -5,25 +5,37 @@
 <div class="problems-header">
   <h1>Problems</h1>
   <div class="filter-bar">
+    {% if all_tournaments | length > 1 %}
+    <div class="filter-group">
+      <label class="filter-label" for="tournament-select">Tournament</label>
+      <select id="tournament-select" class="tournament-select filter-select"
+              onchange="location.href='/problems?tournament='+this.value+'{% if filter_difficulty != "" %}&difficulty={{ filter_difficulty }}{% endif %}{% if filter_status != "" %}&status={{ filter_status }}{% endif %}'">
+        <option value="all"{% if filter_tournament == "all" %} selected{% endif %}>All</option>
+        {% for t in all_tournaments %}
+        <option value="{{ t.slug }}"{% if filter_tournament == t.slug %} selected{% endif %}>{{ t.name }}{% if t.is_active %} ★{% endif %}</option>
+        {% endfor %}
+      </select>
+    </div>
+    {% endif %}
     <div class="filter-group">
       <span class="filter-label">Difficulty</span>
-      <a href="/problems{% if filter_status != "" %}?status={{ filter_status }}{% endif %}"
+      <a href="/problems?tournament={{ filter_tournament }}{% if filter_status != "" %}&status={{ filter_status }}{% endif %}"
          class="btn btn-sm{% if filter_difficulty == "" %} btn-primary{% endif %}">All</a>
-      <a href="/problems?difficulty=easy{% if filter_status != "" %}&status={{ filter_status }}{% endif %}"
+      <a href="/problems?tournament={{ filter_tournament }}&difficulty=easy{% if filter_status != "" %}&status={{ filter_status }}{% endif %}"
          class="btn btn-sm{% if filter_difficulty == "easy" %} btn-primary{% endif %}">Easy</a>
-      <a href="/problems?difficulty=medium{% if filter_status != "" %}&status={{ filter_status }}{% endif %}"
+      <a href="/problems?tournament={{ filter_tournament }}&difficulty=medium{% if filter_status != "" %}&status={{ filter_status }}{% endif %}"
          class="btn btn-sm{% if filter_difficulty == "medium" %} btn-primary{% endif %}">Medium</a>
-      <a href="/problems?difficulty=hard{% if filter_status != "" %}&status={{ filter_status }}{% endif %}"
+      <a href="/problems?tournament={{ filter_tournament }}&difficulty=hard{% if filter_status != "" %}&status={{ filter_status }}{% endif %}"
          class="btn btn-sm{% if filter_difficulty == "hard" %} btn-primary{% endif %}">Hard</a>
     </div>
     {% if is_logged_in %}
     <div class="filter-group">
       <span class="filter-label">Status</span>
-      <a href="/problems{% if filter_difficulty != "" %}?difficulty={{ filter_difficulty }}{% endif %}"
+      <a href="/problems?tournament={{ filter_tournament }}{% if filter_difficulty != "" %}&difficulty={{ filter_difficulty }}{% endif %}"
          class="btn btn-sm{% if filter_status == "" %} btn-primary{% endif %}">All</a>
-      <a href="/problems?status=unsolved{% if filter_difficulty != "" %}&difficulty={{ filter_difficulty }}{% endif %}"
+      <a href="/problems?tournament={{ filter_tournament }}&status=unsolved{% if filter_difficulty != "" %}&difficulty={{ filter_difficulty }}{% endif %}"
          class="btn btn-sm{% if filter_status == "unsolved" %} btn-primary{% endif %}">Unsolved</a>
-      <a href="/problems?status=solved{% if filter_difficulty != "" %}&difficulty={{ filter_difficulty }}{% endif %}"
+      <a href="/problems?tournament={{ filter_tournament }}&status=solved{% if filter_difficulty != "" %}&difficulty={{ filter_difficulty }}{% endif %}"
          class="btn btn-sm{% if filter_status == "solved" %} btn-primary{% endif %}">Solved</a>
     </div>
     {% endif %}

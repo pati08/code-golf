@@ -1,0 +1,35 @@
+{% extends "base.html" %}
+{% block title %}Admin: Tournaments — Code Golf{% endblock %}
+{% block content %}
+<h1>Tournaments <a href="/admin/tournaments/new" class="btn btn-primary btn-sm">+ New</a></h1>
+<table class="table">
+  <thead>
+    <tr><th>Name</th><th>Slug</th><th>Active</th><th>Start</th><th>End</th><th>Actions</th></tr>
+  </thead>
+  <tbody>
+    {% for t in tournaments %}
+    <tr>
+      <td><a href="/tournaments/{{ t.slug }}">{{ t.name }}</a></td>
+      <td><code>{{ t.slug }}</code></td>
+      <td>
+        {% if t.is_active %}
+        <span class="badge badge-success">Active</span>
+        {% else %}
+        <span class="badge badge-muted">No</span>
+        {% endif %}
+      </td>
+      <td>{{ t.start_date | default("—") }}</td>
+      <td>{{ t.end_date | default("—") }}</td>
+      <td class="actions">
+        <a href="/admin/tournaments/{{ t.slug }}/edit" class="btn btn-sm">Edit</a>
+        {% if not t.is_active %}
+        <form method="post" action="/admin/tournaments/{{ t.slug }}/set-active" style="display:inline">
+          <button class="btn btn-sm btn-primary">Set Active</button>
+        </form>
+        {% endif %}
+      </td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+{% endblock %}

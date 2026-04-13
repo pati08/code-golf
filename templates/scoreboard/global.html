@@ -4,6 +4,21 @@
 <div class="sb-page">
   <h1 class="sb-title">Scoreboard</h1>
 
+  {% if all_tournaments | length > 1 %}
+  <div class="filter-bar" style="margin-bottom: 1.5rem;">
+    <div class="filter-group">
+      <label class="filter-label" for="tournament-select">Tournament</label>
+      <select id="tournament-select" class="tournament-select filter-select"
+              onchange="location.href='/scoreboard?tournament='+this.value">
+        <option value="all"{% if filter_tournament == "all" %} selected{% endif %}>All Time</option>
+        {% for t in all_tournaments %}
+        <option value="{{ t.slug }}"{% if filter_tournament == t.slug %} selected{% endif %}>{{ t.name }}{% if t.is_active %} ★{% endif %}</option>
+        {% endfor %}
+      </select>
+    </div>
+  </div>
+  {% endif %}
+
   <div class="sb-layout">
     {% if problems %}
     <section class="sb-section sb-section-problems">

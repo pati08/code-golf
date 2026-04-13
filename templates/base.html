@@ -14,6 +14,7 @@
     <ul class="nav-links">
       <li><a href="/problems">Problems</a></li>
       <li><a href="/scoreboard">Scoreboard</a></li>
+      <li><a href="/tournaments">Tournaments</a></li>
       {% if current_user %}
         {% if current_user.is_admin %}
           <li><a href="/admin">Admin</a></li>
@@ -97,5 +98,14 @@
       }
     }
   </style>
+
+  <script>
+    document.addEventListener('change', function(e) {
+      if (e.target.classList.contains('tournament-select')) {
+        const val = e.target.value;
+        document.cookie = 'selectedTournament=' + encodeURIComponent(val) + ';path=/;max-age=31536000;SameSite=Lax';
+      }
+    });
+  </script>
 </body>
 </html>

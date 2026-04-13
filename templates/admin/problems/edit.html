@@ -12,6 +12,14 @@
     <input type="text" id="slug" name="slug" value="{{ problem.slug }}" required pattern="[a-z0-9\-]+">
   </div>
   <div class="form-group">
+    <label for="tournament_id">Tournament</label>
+    <select id="tournament_id" name="tournament_id" required>
+      {% for t in tournaments %}
+      <option value="{{ t.id }}" {% if t.id == problem.tournament_id %}selected{% endif %}>{{ t.name }}</option>
+      {% endfor %}
+    </select>
+  </div>
+  <div class="form-group">
     <label for="difficulty">Difficulty</label>
     <select id="difficulty" name="difficulty">
       <option value="easy" {% if problem.difficulty == "easy" %}selected{% endif %}>Easy</option>
