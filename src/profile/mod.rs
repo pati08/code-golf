@@ -39,7 +39,7 @@ pub async fn get_profile(
         .collect();
 
     let cookie_tournament = crate::app::get_cookie(&headers, "selectedTournament");
-    let default_slug = sqlx::query("SELECT slug FROM tournaments ORDER BY created_at DESC LIMIT 1")
+    let default_slug = sqlx::query("SELECT slug FROM tournaments WHERE is_active = 1 LIMIT 1")
         .fetch_optional(&state.db)
         .await?
         .map(|r| r.get::<String, _>("slug"));

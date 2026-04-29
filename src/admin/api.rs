@@ -183,3 +183,41 @@ pub async fn post_api_toggle_publish(
         }),
     ))
 }
+
+// ── GET /api/admin/tournaments ────────────────────────────────────────────────
+
+#[derive(Serialize)]
+pub struct TournamentInfo {
+    pub id: i64,
+    pub slug: String,
+    pub name: String,
+    pub is_active: bool,
+}
+
+pub async fn get_api_tournaments(
+    State(state): State<AppState>,
+    BearerAdmin(_admin): BearerAdmin,
+) -> ApiResult<Vec<TournamentInfo>> {
+    let rows = sqlx::query(
+        "SELECT id, slug, name, is_active FROM tournaments \
+         ORDER BY is_active DESC, created_at DESC",
+    )
+    .fetch_all(&state.db)
+    .await
+    .map_err(|e| {
+        tracing::error!("DB error listing tournaments: {e}");
+        api_err(StatusCode::INTERNAL_SERVER_ERROR, "database error")
+    })?;
+
+    let tournaments = rows
+        .iter()
+        .map(|r| TournamentInfo {
+            id: r.get("id"),
+            slug: r.get("slug"),
+            name: r.get("name"),
+            is_active: r.get::<i64, _>("is_active") != 0,
+        })
+        .collect();
+
+    Ok((StatusCode::OK, Json(tournaments)))
+}

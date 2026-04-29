@@ -10,8 +10,20 @@ pub async fn create_pool(database_url: &str) -> anyhow::Result<SqlitePool> {
         .foreign_keys(true)
         .busy_timeout(std::time::Duration::from_secs(5));
 
+    // Use configuration from env, with sensible defaults
+    let max_connections: u32 = std::env::var("DATABASE_MAX_CONNECTIONS")
+        .ok()
+        .and_then(|s| s.parse().ok())
+        .unwrap_or(20);
+    let min_connections: u32 = std::env::var("DATABASE_MIN_CONNECTIONS")
+        .ok()
+        .and_then(|s| s.parse().ok())
+        .unwrap_or(5);
+
     let pool = SqlitePoolOptions::new()
-        .max_connections(10)
+        .max_connections(max_connections)
+        .min_connections(min_connections)
+        .acquire_timeout(std::time::Duration::from_secs(30))
         .connect_with(opts)
         .await?;
 

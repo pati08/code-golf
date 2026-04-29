@@ -3,13 +3,13 @@ use axum::{
     http::HeaderMap,
     response::Html,
 };
-use pulldown_cmark::{Parser, html};
+use pulldown_cmark::{Event, Parser, html};
 use serde::Deserialize;
-use sqlx::Row;
+use sqlx::{QueryBuilder, Row};
 
 use crate::{app::AppState, auth::OptionalUser, error::AppError};
 
-#[derive(Debug, Deserialize, Default)]
+#[derive(Debug, Deserialize, Default, Clone)]
 pub struct FilterParams {
     #[serde(default)]
     pub difficulty: Option<String>,
@@ -42,7 +42,7 @@ async fn fetch_tournament_list(
 
 async fn fetch_active_tournament_slug(db: &sqlx::SqlitePool) -> Result<Option<String>, AppError> {
     Ok(
-        sqlx::query("SELECT slug FROM tournaments ORDER BY created_at DESC LIMIT 1")
+        sqlx::query("SELECT slug FROM tournaments WHERE is_active = 1 LIMIT 1")
             .fetch_optional(db)
             .await?
             .map(|r| r.get(0)),
@@ -71,61 +71,70 @@ pub async fn get_problems(
         active_tournament_slug.as_deref().unwrap_or("all")
     };
 
-    let diff_clause = match params.difficulty.as_deref() {
-        Some("easy") | Some("medium") | Some("hard") => "AND p.difficulty = ?",
-        _ => "",
-    };
+    let valid_diff = params
+        .difficulty
+        .as_deref()
+        .filter(|d| matches!(*d, "easy" | "medium" | "hard"));
 
-    let tournament_clause = if effective_tournament == "all" {
-        ""
-    } else {
-        "AND t.slug = ?"
-    };
-
-    let sql = format!(
-        r#"SELECT
-            p.id, p.slug, p.title, p.difficulty,
+    // Build query safely using query_builder to avoid format! vulnerabilities
+    let mut query_builder = QueryBuilder::new(
+        r#"SELECT p.id, p.slug, p.title, p.difficulty,
             CASE WHEN bs.user_id IS NOT NULL THEN 1 ELSE 0 END AS solved
         FROM problems p
         LEFT JOIN tournaments t ON t.id = p.tournament_id
         LEFT JOIN (
             SELECT DISTINCT user_id, problem_id FROM best_submissions WHERE user_id = ?
         ) bs ON bs.problem_id = p.id
-        WHERE p.is_published = 1 {tournament_clause} {diff_clause}
-        ORDER BY
-            CASE p.difficulty WHEN 'easy' THEN 1 WHEN 'medium' THEN 2 WHEN 'hard' THEN 3 ELSE 4 END,
-            p.title ASC"#
+        WHERE p.is_published = 1"#,
     );
 
-    let valid_diff = params
-        .difficulty
-        .as_deref()
-        .filter(|d| matches!(*d, "easy" | "medium" | "hard"));
+    // Add tournament filter if not "all"
+    if effective_tournament != "all" {
+        query_builder.push(" AND t.slug = ");
+        query_builder.push_bind(effective_tournament.to_string());
+    }
 
-    let rows = match (effective_tournament == "all", valid_diff) {
-        (true, None) => sqlx::query(&sql).bind(user_id).fetch_all(&state.db).await?,
-        (true, Some(diff)) => {
-            sqlx::query(&sql)
-                .bind(user_id)
-                .bind(diff)
-                .fetch_all(&state.db)
-                .await?
+    // Add difficulty filter if valid
+    if let Some(diff) = valid_diff.clone() {
+        query_builder.push(" AND p.difficulty = ");
+        query_builder.push_bind(diff.to_string());
+    }
+
+    query_builder.push(" ORDER BY");
+    query_builder.push(" CASE p.difficulty WHEN 'easy' THEN 1 WHEN 'medium' THEN 2 WHEN 'hard' THEN 3 ELSE 4 END,");
+    query_builder.push(" p.title ASC");
+
+    let sql = query_builder.build();
+
+    let rows = if user_id == 0 {
+        sql.fetch_all(&state.db).await?
+    } else {
+        let mut user_query = QueryBuilder::new(
+            r#"SELECT p.id, p.slug, p.title, p.difficulty,
+                CASE WHEN bs.user_id IS NOT NULL THEN 1 ELSE 0 END AS solved
+            FROM problems p
+            LEFT JOIN tournaments t ON t.id = p.tournament_id
+            LEFT JOIN (
+                SELECT DISTINCT user_id, problem_id FROM best_submissions WHERE user_id = ?
+            ) bs ON bs.problem_id = p.id
+            WHERE p.is_published = 1"#,
+        );
+
+        if effective_tournament != "all" {
+            user_query.push(" AND t.slug = ");
+            user_query.push_bind(effective_tournament.to_string());
         }
-        (false, None) => {
-            sqlx::query(&sql)
-                .bind(user_id)
-                .bind(effective_tournament)
-                .fetch_all(&state.db)
-                .await?
+
+        if let Some(diff) = valid_diff {
+            user_query.push(" AND p.difficulty = ");
+            user_query.push_bind(diff.to_string());
         }
-        (false, Some(diff)) => {
-            sqlx::query(&sql)
-                .bind(user_id)
-                .bind(effective_tournament)
-                .bind(diff)
-                .fetch_all(&state.db)
-                .await?
-        }
+
+        user_query.push(" ORDER BY");
+        user_query.push(" CASE p.difficulty WHEN 'easy' THEN 1 WHEN 'medium' THEN 2 WHEN 'hard' THEN 3 ELSE 4 END,");
+        user_query.push(" p.title ASC");
+
+        user_query.build().bind(user_id).fetch_all(&state.db).await?
     };
 
     // Build problem list with solved flag
@@ -196,8 +205,9 @@ pub async fn get_problem(
     let problem_id: i64 = row.get("id");
     let description: String = row.get("description");
 
-    // Render markdown
-    let parser = Parser::new(&description);
+    // Render markdown, stripping raw HTML to prevent XSS
+    let parser = Parser::new(&description)
+        .filter(|e| !matches!(e, Event::Html(_) | Event::InlineHtml(_)));
     let mut description_html = String::new();
     html::push_html(&mut description_html, parser);
 

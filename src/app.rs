@@ -11,9 +11,9 @@ use sqlx::SqlitePool;
 use tower_http::{compression::CompressionLayer, services::ServeDir, trace::TraceLayer};
 
 use crate::{
-    admin::{api as admin_api, handlers as admin}, auth::handlers as auth, config::Config,
+    admin::{api as admin_api, handlers as admin}, auth::handlers as auth, cache::AppCache, config::Config,
     error::AppError, feedback::handlers as feedback, problems::handlers as problems, profile,
-    runner::LanguageRegistry, scoreboard::handlers as scoreboard,
+    rate_limit::RateLimiters, runner::LanguageRegistry, scoreboard::handlers as scoreboard,
     submissions::handlers as submissions, tournaments,
 };
 
@@ -21,9 +21,10 @@ use crate::{
 pub struct AppState {
     pub db: SqlitePool,
     pub templates: Arc<RwLock<Environment<'static>>>,
-    #[allow(dead_code)]
     pub config: Arc<Config>,
     pub runner: Arc<LanguageRegistry>,
+    pub cache: AppCache,
+    pub rate_limiters: RateLimiters,
 }
 
 pub fn render(
@@ -151,6 +152,7 @@ pub fn create_router(state: AppState) -> Router {
         .route("/admin/api-keys/{id}/revoke", post(admin::post_revoke_api_key))
         .route("/admin/api-keys/{id}/delete", post(admin::post_delete_api_key))
         // Admin JSON API (bearer token auth)
+        .route("/api/admin/tournaments", get(admin_api::get_api_tournaments))
         .route(
             "/api/admin/problems",
             post(admin_api::post_api_create_problem),

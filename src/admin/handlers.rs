@@ -150,6 +150,7 @@ pub async fn post_create_problem(
         Some(&form.par_solution)
     };
     let par_byte_count: Option<i64> = par_solution.map(|s| s.trim_end_matches('\n').len() as i64);
+    let tournament_id: Option<i64> = if form.tournament_id > 0 { Some(form.tournament_id) } else { None };
 
     sqlx::query(
         "INSERT INTO problems (slug, title, description, difficulty, time_limit_ms, memory_limit_kb, created_by, par_solution, par_byte_count, tournament_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
@@ -163,7 +164,7 @@ pub async fn post_create_problem(
     .bind(admin.id)
     .bind(par_solution)
     .bind(par_byte_count)
-    .bind(form.tournament_id)
+    .bind(tournament_id)
     .execute(&state.db)
     .await
     .map_err(|e| {
@@ -227,6 +228,7 @@ pub async fn post_update_problem(
         Some(&form.par_solution)
     };
     let par_byte_count: Option<i64> = par_solution.map(|s| s.trim_end_matches('\n').len() as i64);
+    let tournament_id: Option<i64> = if form.tournament_id > 0 { Some(form.tournament_id) } else { None };
 
     sqlx::query(
         "UPDATE problems SET slug = ?, title = ?, description = ?, difficulty = ?, time_limit_ms = ?, memory_limit_kb = ?, par_solution = ?, par_byte_count = ?, tournament_id = ?, updated_at = datetime('now') WHERE slug = ?",
@@ -239,7 +241,7 @@ pub async fn post_update_problem(
     .bind(form.memory_limit_kb)
     .bind(par_solution)
     .bind(par_byte_count)
-    .bind(form.tournament_id)
+    .bind(tournament_id)
     .bind(&slug)
     .execute(&state.db)
     .await?;

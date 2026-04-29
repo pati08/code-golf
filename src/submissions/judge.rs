@@ -72,7 +72,7 @@ async fn judge(
     }
 
     for tc in &test_cases {
-        let input: String = tc.get("input");
+        let input: String = normalize(&tc.get::<String, _>("input"));
         let expected_output: String = tc.get("expected_output");
         let is_sample: bool = tc.get::<i64, _>("is_sample") != 0;
 

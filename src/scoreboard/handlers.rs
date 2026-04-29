@@ -8,26 +8,20 @@ use sqlx::Row;
 
 use crate::{app::AppState, auth::OptionalUser, error::AppError};
 
-#[derive(Debug, Deserialize, Default)]
+#[derive(Debug, Deserialize, Default, Clone)]
 pub struct ScoreboardParams {
     #[serde(default)]
     pub tournament: Option<String>,
 }
 
-pub async fn get_global_scoreboard(
-    State(state): State<AppState>,
-    OptionalUser(user): OptionalUser,
-    Query(params): Query<ScoreboardParams>,
-    headers: HeaderMap,
-) -> Result<Html<String>, AppError> {
-    // Fetch tournament list for selector
-    let t_rows = sqlx::query(
+async fn fetch_tournament_list(db: &sqlx::SqlitePool) -> Result<Vec<minijinja::Value>, AppError> {
+    let rows = sqlx::query(
         "SELECT slug, name, is_active FROM tournaments ORDER BY is_active DESC, name ASC",
     )
-    .fetch_all(&state.db)
+    .fetch_all(db)
     .await?;
 
-    let all_tournaments: Vec<_> = t_rows
+    Ok(rows
         .iter()
         .map(|r| {
             minijinja::context! {
@@ -36,10 +30,20 @@ pub async fn get_global_scoreboard(
                 is_active => r.get::<i64, _>("is_active") != 0,
             }
         })
-        .collect();
+        .collect())
+}
+
+pub async fn get_global_scoreboard(
+    State(state): State<AppState>,
+    OptionalUser(user): OptionalUser,
+    Query(params): Query<ScoreboardParams>,
+    headers: HeaderMap,
+) -> Result<Html<String>, AppError> {
+    // Fetch tournament list
+    let all_tournaments = fetch_tournament_list(&state.db).await?;
 
     let cookie_tournament = crate::app::get_cookie(&headers, "selectedTournament");
-    let active_tournament_slug: Option<String> = sqlx::query("SELECT slug FROM tournaments ORDER BY created_at DESC LIMIT 1")
+    let active_tournament_slug: Option<String> = sqlx::query("SELECT slug FROM tournaments WHERE is_active = 1 LIMIT 1")
         .fetch_optional(&state.db)
         .await?
         .map(|r| r.get("slug"));
@@ -53,58 +57,59 @@ pub async fn get_global_scoreboard(
         active_tournament_slug.as_deref().unwrap_or("all")
     };
 
-    // Build leaderboard query
-    let (entries, problems) = if effective_tournament == "all" {
+    let (entry_rows, problem_rows) = if effective_tournament == "all" {
+        // No tournament filter - safe hardcoded query
         let entry_rows = sqlx::query(
             r#"SELECT u.username,
-                   SUM(bs.byte_count) as total_bytes,
-                   COUNT(DISTINCT bs.problem_id) as solved_count,
-                   CAST(ROUND(SUM(bs.byte_count) * 1.0 / COUNT(DISTINCT bs.problem_id)) AS INTEGER) as avg_bytes,
-                   SUM(CASE WHEN p.difficulty = 'easy' THEN 1 ELSE 0 END) as easy_count,
-                   SUM(CASE WHEN p.difficulty = 'medium' THEN 1 ELSE 0 END) as medium_count,
-                   SUM(CASE WHEN p.difficulty = 'hard' THEN 1 ELSE 0 END) as hard_count
-               FROM best_submissions bs
-               JOIN users u ON u.id = bs.user_id
-               JOIN problems p ON p.id = bs.problem_id
-               GROUP BY bs.user_id, u.username
-               ORDER BY solved_count DESC, total_bytes ASC"#,
+                       SUM(bs.byte_count) as total_bytes,
+                       COUNT(DISTINCT bs.problem_id) as solved_count,
+                       CAST(ROUND(SUM(bs.byte_count) * 1.0 / COUNT(DISTINCT bs.problem_id)) AS INTEGER) as avg_bytes,
+                       SUM(CASE WHEN p.difficulty = 'easy' THEN 1 ELSE 0 END) as easy_count,
+                       SUM(CASE WHEN p.difficulty = 'medium' THEN 1 ELSE 0 END) as medium_count,
+                       SUM(CASE WHEN p.difficulty = 'hard' THEN 1 ELSE 0 END) as hard_count
+                   FROM best_submissions bs
+                   JOIN users u ON u.id = bs.user_id
+                   JOIN problems p ON p.id = bs.problem_id
+                   GROUP BY bs.user_id, u.username
+                   ORDER BY solved_count DESC, total_bytes ASC"#,
         )
         .fetch_all(&state.db)
         .await?;
 
         let problem_rows = sqlx::query(
             r#"SELECT p.title, p.slug, p.difficulty,
-                   COUNT(bs.user_id) as solver_count,
-                   MIN(bs.byte_count) as best_bytes,
-                   CAST(ROUND(AVG(bs.byte_count)) AS INTEGER) as avg_bytes
-               FROM problems p
-               LEFT JOIN best_submissions bs ON bs.problem_id = p.id
-               WHERE p.is_published = 1
-               GROUP BY p.id
-               ORDER BY
-                   CASE p.difficulty WHEN 'easy' THEN 0 WHEN 'medium' THEN 1 WHEN 'hard' THEN 2 ELSE 3 END,
-                   p.title"#,
+                       COUNT(bs.user_id) as solver_count,
+                       MIN(bs.byte_count) as best_bytes,
+                       CAST(ROUND(AVG(bs.byte_count)) AS INTEGER) as avg_bytes
+                   FROM problems p
+                   LEFT JOIN best_submissions bs ON bs.problem_id = p.id
+                   WHERE p.is_published = 1
+                   GROUP BY p.id
+                   ORDER BY
+                       CASE p.difficulty WHEN 'easy' THEN 0 WHEN 'medium' THEN 1 WHEN 'hard' THEN 2 ELSE 3 END,
+                       p.title"#,
         )
         .fetch_all(&state.db)
         .await?;
 
         (entry_rows, problem_rows)
     } else {
+        // With tournament filter - use parameterized query
         let entry_rows = sqlx::query(
             r#"SELECT u.username,
-                   SUM(bs.byte_count) as total_bytes,
-                   COUNT(DISTINCT bs.problem_id) as solved_count,
-                   CAST(ROUND(SUM(bs.byte_count) * 1.0 / COUNT(DISTINCT bs.problem_id)) AS INTEGER) as avg_bytes,
-                   SUM(CASE WHEN p.difficulty = 'easy' THEN 1 ELSE 0 END) as easy_count,
-                   SUM(CASE WHEN p.difficulty = 'medium' THEN 1 ELSE 0 END) as medium_count,
-                   SUM(CASE WHEN p.difficulty = 'hard' THEN 1 ELSE 0 END) as hard_count
-               FROM best_submissions bs
-               JOIN users u ON u.id = bs.user_id
-               JOIN problems p ON p.id = bs.problem_id
-               JOIN tournaments t ON t.id = p.tournament_id
-               WHERE t.slug = ?
-               GROUP BY bs.user_id, u.username
-               ORDER BY solved_count DESC, total_bytes ASC"#,
+                       SUM(bs.byte_count) as total_bytes,
+                       COUNT(DISTINCT bs.problem_id) as solved_count,
+                       CAST(ROUND(SUM(bs.byte_count) * 1.0 / COUNT(DISTINCT bs.problem_id)) AS INTEGER) as avg_bytes,
+                       SUM(CASE WHEN p.difficulty = 'easy' THEN 1 ELSE 0 END) as easy_count,
+                       SUM(CASE WHEN p.difficulty = 'medium' THEN 1 ELSE 0 END) as medium_count,
+                       SUM(CASE WHEN p.difficulty = 'hard' THEN 1 ELSE 0 END) as hard_count
+                   FROM best_submissions bs
+                   JOIN users u ON u.id = bs.user_id
+                   JOIN problems p ON p.id = bs.problem_id
+                   JOIN tournaments t ON t.id = p.tournament_id
+                   WHERE t.slug = ?
+                   GROUP BY bs.user_id, u.username
+                   ORDER BY solved_count DESC, total_bytes ASC"#,
         )
         .bind(effective_tournament)
         .fetch_all(&state.db)
@@ -112,17 +117,17 @@ pub async fn get_global_scoreboard(
 
         let problem_rows = sqlx::query(
             r#"SELECT p.title, p.slug, p.difficulty,
-                   COUNT(bs.user_id) as solver_count,
-                   MIN(bs.byte_count) as best_bytes,
-                   CAST(ROUND(AVG(bs.byte_count)) AS INTEGER) as avg_bytes
-               FROM problems p
-               LEFT JOIN best_submissions bs ON bs.problem_id = p.id
-               JOIN tournaments t ON t.id = p.tournament_id
-               WHERE p.is_published = 1 AND t.slug = ?
-               GROUP BY p.id
-               ORDER BY
-                   CASE p.difficulty WHEN 'easy' THEN 0 WHEN 'medium' THEN 1 WHEN 'hard' THEN 2 ELSE 3 END,
-                   p.title"#,
+                       COUNT(bs.user_id) as solver_count,
+                       MIN(bs.byte_count) as best_bytes,
+                       CAST(ROUND(AVG(bs.byte_count)) AS INTEGER) as avg_bytes
+                   FROM problems p
+                   LEFT JOIN best_submissions bs ON bs.problem_id = p.id
+                   JOIN tournaments t ON t.id = p.tournament_id
+                   WHERE p.is_published = 1 AND t.slug = ?
+                   GROUP BY p.id
+                   ORDER BY
+                       CASE p.difficulty WHEN 'easy' THEN 0 WHEN 'medium' THEN 1 WHEN 'hard' THEN 2 ELSE 3 END,
+                       p.title"#,
         )
         .bind(effective_tournament)
         .fetch_all(&state.db)
@@ -131,7 +136,7 @@ pub async fn get_global_scoreboard(
         (entry_rows, problem_rows)
     };
 
-    let entries: Vec<_> = entries
+    let entries: Vec<_> = entry_rows
         .iter()
         .map(|r| {
             minijinja::context! {
@@ -146,7 +151,7 @@ pub async fn get_global_scoreboard(
         })
         .collect();
 
-    let problems: Vec<_> = problems
+    let problems: Vec<_> = problem_rows
         .iter()
         .map(|r| {
             minijinja::context! {
@@ -179,6 +184,7 @@ pub async fn get_problem_scoreboard(
     Path(slug): Path<String>,
     OptionalUser(user): OptionalUser,
 ) -> Result<Html<String>, AppError> {
+    // Get problem details - parameterized query
     let problem_row = sqlx::query(
         "SELECT id, title FROM problems WHERE slug = ? AND is_published = 1",
     )
@@ -190,6 +196,7 @@ pub async fn get_problem_scoreboard(
     let problem_id: i64 = problem_row.get("id");
     let problem_title: String = problem_row.get("title");
 
+    // Get leaderboard entries - parameterized query for safety
     let rows = sqlx::query(
         r#"SELECT u.username, l.display_name as language_name, bs.byte_count,
                s.created_at as submitted_at

@@ -24,6 +24,14 @@ pub enum AppError {
     Internal(#[from] anyhow::Error),
 }
 
+fn html_escape(s: &str) -> String {
+    s.replace('&', "&amp;")
+        .replace('<', "&lt;")
+        .replace('>', "&gt;")
+        .replace('"', "&quot;")
+        .replace('\'', "&#x27;")
+}
+
 impl IntoResponse for AppError {
     fn into_response(self) -> Response {
         let (status, title, message, suggestion) = match &self {
@@ -111,10 +119,10 @@ impl IntoResponse for AppError {
 </html>"#,
             status.as_u16(),
             status.as_u16(),
-            title,
-            message,
+            html_escape(title),
+            html_escape(message),
             suggestion
-                .map(|s| format!(r#"<p class="error-suggestion">{}</p>"#, s))
+                .map(|s| format!(r#"<p class="error-suggestion">{}</p>"#, html_escape(s)))
                 .unwrap_or_default()
         );
 

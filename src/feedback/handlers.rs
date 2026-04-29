@@ -35,6 +35,18 @@ pub async fn post_feedback(
     OptionalUser(user): OptionalUser,
     Form(form): Form<FeedbackForm>,
 ) -> Result<impl IntoResponse, AppError> {
+    let rate_key = user.as_ref().map(|u| u.id.to_string()).unwrap_or_else(|| "anon".to_string());
+    if !state.rate_limiters.feedback.check(rate_key).await {
+        let ctx = minijinja::context! {
+            error => "Too many feedback submissions. Please try again later.",
+            category => &form.category,
+            subject => form.subject.trim(),
+            message => form.message.trim(),
+        };
+        return crate::app::render(&state.templates, "feedback/form.html", ctx)
+            .map(|html| (StatusCode::TOO_MANY_REQUESTS, html).into_response());
+    }
+
     // Validation
     if form.subject.trim().is_empty() {
         let ctx = minijinja::context! {

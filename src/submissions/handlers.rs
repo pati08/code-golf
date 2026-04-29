@@ -6,12 +6,7 @@ use axum::{
 use serde::Deserialize;
 use sqlx::Row;
 
-use crate::{
-    app::AppState,
-    auth::{OptionalUser, RequiredUser},
-    error::AppError,
-    submissions::judge,
-};
+use crate::{app::AppState, auth::{OptionalUser, RequiredUser}, error::AppError, submissions::judge};
 
 #[derive(Deserialize)]
 pub struct SubmitForm {
@@ -25,8 +20,12 @@ pub async fn post_submit(
     RequiredUser(user): RequiredUser,
     Form(form): Form<SubmitForm>,
 ) -> Result<Html<String>, AppError> {
-    if form.code.len() > 65536 {
-        return Err(AppError::BadRequest("Code exceeds 64 KB limit".to_string()));
+    if !state.rate_limiters.submit.check(user.id.to_string()).await {
+        return Err(AppError::BadRequest("Submission rate limit exceeded. Try again shortly.".to_string()));
+    }
+
+    if form.code.len() > state.config.max_code_size {
+        return Err(AppError::BadRequest("Code exceeds limit".to_string()));
     }
 
     let problem_row = sqlx::query(
@@ -45,7 +44,8 @@ pub async fn post_submit(
         .filter(|l| l.is_enabled)
         .ok_or_else(|| AppError::BadRequest("Invalid or disabled language".to_string()))?;
 
-    let byte_count = form.code.trim_end_matches('\n').len() as i64;
+    let code = form.code.replace("\r\n", "\n");
+    let byte_count = code.trim_end_matches('\n').len() as i64;
 
     let result = sqlx::query(
         "INSERT INTO submissions (user_id, problem_id, language_id, code, byte_count) VALUES (?, ?, ?, ?, ?)",
@@ -53,7 +53,7 @@ pub async fn post_submit(
     .bind(user.id)
     .bind(problem_id)
     .bind(lang.id)
-    .bind(&form.code)
+    .bind(&code)
     .bind(byte_count)
     .execute(&state.db)
     .await?;
