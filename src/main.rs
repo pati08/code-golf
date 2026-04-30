@@ -3,6 +3,7 @@ mod app;
 mod auth;
 mod cache;
 mod config;
+mod csrf;
 mod db;
 mod error;
 mod feedback;
@@ -35,6 +36,8 @@ use crate::{
     runner::LanguageRegistry,
 };
 
+const JUDGE_CONCURRENCY: usize = 4;
+
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
     tracing_subscriber::registry()
@@ -54,8 +57,9 @@ async fn main() -> anyhow::Result<()> {
     session_store.migrate().await?;
     let session_layer = SessionManagerLayer::new(session_store)
         .with_secure(!cfg!(debug_assertions))
+        .with_same_site(tower_sessions::cookie::SameSite::Strict)
         .with_expiry(tower_sessions::Expiry::OnInactivity(time::Duration::days(
-            7,
+            14,
         )));
 
     // Templates
@@ -66,6 +70,9 @@ async fn main() -> anyhow::Result<()> {
 
     // Cache
     let cache = cache::AppCache::new(config.cache_ttl_seconds).await;
+
+    // Judge concurrency semaphore
+    let judge_semaphore = std::sync::Arc::new(tokio::sync::Semaphore::new(JUDGE_CONCURRENCY));
 
     // Spawn task to refresh templates
     #[cfg(debug_assertions)]
@@ -127,6 +134,7 @@ async fn main() -> anyhow::Result<()> {
         runner,
         cache,
         rate_limiters: RateLimiters::new(),
+        judge_semaphore,
     };
 
     let app = create_router(state).layer(session_layer);

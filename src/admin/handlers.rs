@@ -6,6 +6,7 @@ use axum::{
 use rand::Rng;
 use serde::Deserialize;
 use sqlx::Row;
+use tower_sessions::Session;
 
 use crate::{app::AppState, auth::RequiredAdmin, error::AppError};
 
@@ -116,12 +117,15 @@ async fn fetch_tournaments_for_form(
 pub async fn get_new_problem(
     State(state): State<AppState>,
     RequiredAdmin(admin): RequiredAdmin,
+    session: Session,
 ) -> Result<Html<String>, AppError> {
+    let csrf_token = crate::csrf::get_or_create_token(&session).await?;
     let (tournaments, active_tournament_id) = fetch_tournaments_for_form(&state.db).await?;
     let ctx = minijinja::context! {
         tournaments,
         active_tournament_id,
         current_user => admin_ctx(&admin),
+        csrf_token,
     };
     crate::app::render(&state.templates, "admin/problems/new.html", ctx)
 }
@@ -137,13 +141,16 @@ pub struct ProblemForm {
     #[serde(default)]
     pub par_solution: String,
     pub tournament_id: i64,
+    pub csrf_token: String,
 }
 
 pub async fn post_create_problem(
     State(state): State<AppState>,
     RequiredAdmin(admin): RequiredAdmin,
+    session: Session,
     Form(form): Form<ProblemForm>,
 ) -> Result<Redirect, AppError> {
+    crate::csrf::validate(&session, &form.csrf_token).await?;
     let par_solution: Option<&str> = if form.par_solution.trim().is_empty() {
         None
     } else {
@@ -151,6 +158,8 @@ pub async fn post_create_problem(
     };
     let par_byte_count: Option<i64> = par_solution.map(|s| s.trim_end_matches('\n').len() as i64);
     let tournament_id: Option<i64> = if form.tournament_id > 0 { Some(form.tournament_id) } else { None };
+    let time_limit_ms = form.time_limit_ms.clamp(100, 30_000);
+    let memory_limit_kb = form.memory_limit_kb.clamp(1024, 524_288);
 
     sqlx::query(
         "INSERT INTO problems (slug, title, description, difficulty, time_limit_ms, memory_limit_kb, created_by, par_solution, par_byte_count, tournament_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
@@ -159,8 +168,8 @@ pub async fn post_create_problem(
     .bind(&form.title)
     .bind(&form.description)
     .bind(&form.difficulty)
-    .bind(form.time_limit_ms)
-    .bind(form.memory_limit_kb)
+    .bind(time_limit_ms)
+    .bind(memory_limit_kb)
     .bind(admin.id)
     .bind(par_solution)
     .bind(par_byte_count)
@@ -175,6 +184,8 @@ pub async fn post_create_problem(
         }
     })?;
 
+    state.cache.invalidate_problems();
+
     Ok(Redirect::to(&format!(
         "/admin/problems/{}/test-cases",
         form.slug
@@ -185,7 +196,9 @@ pub async fn get_edit_problem(
     State(state): State<AppState>,
     Path(slug): Path<String>,
     RequiredAdmin(admin): RequiredAdmin,
+    session: Session,
 ) -> Result<Html<String>, AppError> {
+    let csrf_token = crate::csrf::get_or_create_token(&session).await?;
     let row = sqlx::query(
         "SELECT id, slug, title, description, difficulty, is_published, time_limit_ms, memory_limit_kb, par_solution, par_byte_count, tournament_id FROM problems WHERE slug = ?",
     )
@@ -212,6 +225,7 @@ pub async fn get_edit_problem(
         },
         tournaments,
         current_user => admin_ctx(&admin),
+        csrf_token,
     };
     crate::app::render(&state.templates, "admin/problems/edit.html", ctx)
 }
@@ -220,8 +234,10 @@ pub async fn post_update_problem(
     State(state): State<AppState>,
     Path(slug): Path<String>,
     RequiredAdmin(_admin): RequiredAdmin,
+    session: Session,
     Form(form): Form<ProblemForm>,
 ) -> Result<Redirect, AppError> {
+    crate::csrf::validate(&session, &form.csrf_token).await?;
     let par_solution: Option<&str> = if form.par_solution.trim().is_empty() {
         None
     } else {
@@ -229,6 +245,8 @@ pub async fn post_update_problem(
     };
     let par_byte_count: Option<i64> = par_solution.map(|s| s.trim_end_matches('\n').len() as i64);
     let tournament_id: Option<i64> = if form.tournament_id > 0 { Some(form.tournament_id) } else { None };
+    let time_limit_ms = form.time_limit_ms.clamp(100, 30_000);
+    let memory_limit_kb = form.memory_limit_kb.clamp(1024, 524_288);
 
     sqlx::query(
         "UPDATE problems SET slug = ?, title = ?, description = ?, difficulty = ?, time_limit_ms = ?, memory_limit_kb = ?, par_solution = ?, par_byte_count = ?, tournament_id = ?, updated_at = datetime('now') WHERE slug = ?",
@@ -237,14 +255,16 @@ pub async fn post_update_problem(
     .bind(&form.title)
     .bind(&form.description)
     .bind(&form.difficulty)
-    .bind(form.time_limit_ms)
-    .bind(form.memory_limit_kb)
+    .bind(time_limit_ms)
+    .bind(memory_limit_kb)
     .bind(par_solution)
     .bind(par_byte_count)
     .bind(tournament_id)
     .bind(&slug)
     .execute(&state.db)
     .await?;
+
+    state.cache.invalidate_problems();
 
     Ok(Redirect::to("/admin/problems"))
 }
@@ -258,6 +278,9 @@ pub async fn post_toggle_publish(
         .bind(&slug)
         .execute(&state.db)
         .await?;
+
+    state.cache.invalidate_problems();
+
     Ok(Redirect::to("/admin/problems"))
 }
 
@@ -265,7 +288,9 @@ pub async fn get_test_cases(
     State(state): State<AppState>,
     Path(slug): Path<String>,
     RequiredAdmin(admin): RequiredAdmin,
+    session: Session,
 ) -> Result<Html<String>, AppError> {
+    let csrf_token = crate::csrf::get_or_create_token(&session).await?;
     let problem_row = sqlx::query("SELECT id, title, is_published FROM problems WHERE slug = ?")
         .bind(&slug)
         .fetch_optional(&state.db)
@@ -300,6 +325,7 @@ pub async fn get_test_cases(
         problem => minijinja::context! { id => problem_id, slug, title => problem_title, is_published },
         test_cases,
         current_user => admin_ctx(&admin),
+        csrf_token,
     };
     crate::app::render(&state.templates, "admin/problems/test_cases.html", ctx)
 }
@@ -310,14 +336,17 @@ pub struct TestCaseForm {
     pub expected_output: String,
     pub is_sample: Option<String>,
     pub ordinal: i64,
+    pub csrf_token: String,
 }
 
 pub async fn post_add_test_case(
     State(state): State<AppState>,
     Path(slug): Path<String>,
     RequiredAdmin(_admin): RequiredAdmin,
+    session: Session,
     Form(form): Form<TestCaseForm>,
 ) -> Result<Redirect, AppError> {
+    crate::csrf::validate(&session, &form.csrf_token).await?;
     let problem_row = sqlx::query("SELECT id FROM problems WHERE slug = ?")
         .bind(&slug)
         .fetch_optional(&state.db)
@@ -403,7 +432,9 @@ pub async fn get_admin_submissions(
 pub async fn get_admin_users(
     State(state): State<AppState>,
     RequiredAdmin(admin): RequiredAdmin,
+    session: Session,
 ) -> Result<Html<String>, AppError> {
+    let csrf_token = crate::csrf::get_or_create_token(&session).await?;
     let rows = sqlx::query(
         "SELECT id, username, email, is_admin, created_at FROM users ORDER BY created_at DESC",
     )
@@ -423,7 +454,7 @@ pub async fn get_admin_users(
         })
         .collect();
 
-    let ctx = minijinja::context! { users, current_user => admin_ctx(&admin) };
+    let ctx = minijinja::context! { users, current_user => admin_ctx(&admin), csrf_token };
     crate::app::render(&state.templates, "admin/users/list.html", ctx)
 }
 
@@ -447,7 +478,9 @@ pub async fn post_toggle_admin(
 pub async fn get_admin_feedback(
     State(state): State<AppState>,
     RequiredAdmin(admin): RequiredAdmin,
+    session: Session,
 ) -> Result<Html<String>, AppError> {
+    let csrf_token = crate::csrf::get_or_create_token(&session).await?;
     let rows = sqlx::query(
         "SELECT f.id, f.user_id, COALESCE(u.username, 'Anonymous') as username, f.category, f.subject, f.message, f.page_url, f.status, f.created_at FROM feedback f LEFT JOIN users u ON f.user_id = u.id ORDER BY f.created_at DESC",
     )
@@ -471,7 +504,7 @@ pub async fn get_admin_feedback(
         })
         .collect();
 
-    let ctx = minijinja::context! { feedback, current_user => admin_ctx(&admin) };
+    let ctx = minijinja::context! { feedback, current_user => admin_ctx(&admin), csrf_token };
     crate::app::render(&state.templates, "admin/feedback/list.html", ctx)
 }
 
@@ -517,7 +550,9 @@ fn generate_api_key() -> (String, String, String) {
 pub async fn get_admin_api_keys(
     State(state): State<AppState>,
     RequiredAdmin(admin): RequiredAdmin,
+    session: Session,
 ) -> Result<Html<String>, AppError> {
+    let csrf_token = crate::csrf::get_or_create_token(&session).await?;
     let rows = sqlx::query(
         "SELECT k.id, k.name, k.prefix, k.created_at, k.last_used_at, k.is_active, u.username as created_by \
          FROM api_keys k JOIN users u ON u.id = k.created_by \
@@ -541,20 +576,23 @@ pub async fn get_admin_api_keys(
         })
         .collect();
 
-    let ctx = minijinja::context! { keys, current_user => admin_ctx(&admin) };
+    let ctx = minijinja::context! { keys, current_user => admin_ctx(&admin), csrf_token };
     crate::app::render(&state.templates, "admin/api_keys/list.html", ctx)
 }
 
 #[derive(Deserialize)]
 pub struct ApiKeyForm {
     pub name: String,
+    pub csrf_token: String,
 }
 
 pub async fn post_create_api_key(
     State(state): State<AppState>,
     RequiredAdmin(admin): RequiredAdmin,
+    session: Session,
     Form(form): Form<ApiKeyForm>,
 ) -> Result<Html<String>, AppError> {
+    crate::csrf::validate(&session, &form.csrf_token).await?;
     if form.name.trim().is_empty() {
         return Err(AppError::BadRequest("Key name is required".to_string()));
     }
@@ -613,12 +651,15 @@ pub struct TournamentForm {
     pub description: String,
     pub start_date: Option<String>,
     pub end_date: Option<String>,
+    pub csrf_token: String,
 }
 
 pub async fn get_admin_tournaments(
     State(state): State<AppState>,
     RequiredAdmin(admin): RequiredAdmin,
+    session: Session,
 ) -> Result<Html<String>, AppError> {
+    let csrf_token = crate::csrf::get_or_create_token(&session).await?;
     let rows = sqlx::query(
         "SELECT id, slug, name, description, is_active, start_date, end_date, created_at FROM tournaments ORDER BY created_at DESC",
     )
@@ -641,23 +682,27 @@ pub async fn get_admin_tournaments(
         })
         .collect();
 
-    let ctx = minijinja::context! { tournaments, current_user => admin_ctx(&admin) };
+    let ctx = minijinja::context! { tournaments, current_user => admin_ctx(&admin), csrf_token };
     crate::app::render(&state.templates, "admin/tournaments/list.html", ctx)
 }
 
 pub async fn get_new_tournament(
     State(state): State<AppState>,
     RequiredAdmin(admin): RequiredAdmin,
+    session: Session,
 ) -> Result<Html<String>, AppError> {
-    let ctx = minijinja::context! { current_user => admin_ctx(&admin) };
+    let csrf_token = crate::csrf::get_or_create_token(&session).await?;
+    let ctx = minijinja::context! { current_user => admin_ctx(&admin), csrf_token };
     crate::app::render(&state.templates, "admin/tournaments/new.html", ctx)
 }
 
 pub async fn post_create_tournament(
     State(state): State<AppState>,
     RequiredAdmin(_admin): RequiredAdmin,
+    session: Session,
     Form(form): Form<TournamentForm>,
 ) -> Result<Redirect, AppError> {
+    crate::csrf::validate(&session, &form.csrf_token).await?;
     let start_date = form.start_date.as_deref().filter(|s| !s.is_empty());
     let end_date = form.end_date.as_deref().filter(|s| !s.is_empty());
 
@@ -679,6 +724,8 @@ pub async fn post_create_tournament(
         }
     })?;
 
+    state.cache.invalidate_tournaments();
+
     Ok(Redirect::to("/admin/tournaments"))
 }
 
@@ -686,7 +733,9 @@ pub async fn get_edit_tournament(
     State(state): State<AppState>,
     Path(slug): Path<String>,
     RequiredAdmin(admin): RequiredAdmin,
+    session: Session,
 ) -> Result<Html<String>, AppError> {
+    let csrf_token = crate::csrf::get_or_create_token(&session).await?;
     let row = sqlx::query(
         "SELECT id, slug, name, description, is_active, start_date, end_date FROM tournaments WHERE slug = ?",
     )
@@ -706,6 +755,7 @@ pub async fn get_edit_tournament(
             end_date => row.get::<Option<String>, _>("end_date"),
         },
         current_user => admin_ctx(&admin),
+        csrf_token,
     };
     crate::app::render(&state.templates, "admin/tournaments/edit.html", ctx)
 }
@@ -714,8 +764,10 @@ pub async fn post_update_tournament(
     State(state): State<AppState>,
     Path(slug): Path<String>,
     RequiredAdmin(_admin): RequiredAdmin,
+    session: Session,
     Form(form): Form<TournamentForm>,
 ) -> Result<Redirect, AppError> {
+    crate::csrf::validate(&session, &form.csrf_token).await?;
     let start_date = form.start_date.as_deref().filter(|s| !s.is_empty());
     let end_date = form.end_date.as_deref().filter(|s| !s.is_empty());
 
@@ -738,6 +790,8 @@ pub async fn post_update_tournament(
         }
     })?;
 
+    state.cache.invalidate_tournaments();
+
     Ok(Redirect::to("/admin/tournaments"))
 }
 
@@ -746,12 +800,17 @@ pub async fn post_set_active_tournament(
     Path(slug): Path<String>,
     RequiredAdmin(_admin): RequiredAdmin,
 ) -> Result<Redirect, AppError> {
+    let mut tx = state.db.begin().await?;
     sqlx::query("UPDATE tournaments SET is_active = 0")
-        .execute(&state.db)
+        .execute(&mut *tx)
         .await?;
     sqlx::query("UPDATE tournaments SET is_active = 1 WHERE slug = ?")
         .bind(&slug)
-        .execute(&state.db)
+        .execute(&mut *tx)
         .await?;
+    tx.commit().await?;
+
+    state.cache.invalidate_tournaments();
+
     Ok(Redirect::to("/admin/tournaments"))
 }

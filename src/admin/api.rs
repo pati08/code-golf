@@ -79,6 +79,8 @@ pub async fn post_api_create_problem(
         }
     })?;
 
+    state.cache.invalidate_problems();
+
     Ok((
         StatusCode::CREATED,
         Json(ProblemCreated {
@@ -174,6 +176,8 @@ pub async fn post_api_toggle_publish(
             tracing::error!("DB error toggling publish: {e}");
             api_err(StatusCode::INTERNAL_SERVER_ERROR, "database error")
         })?;
+
+    state.cache.invalidate_problems();
 
     Ok((
         StatusCode::OK,

@@ -69,7 +69,13 @@ RUN apt-get update && apt-get install -y \
   && npm install -g prettier \
   && rm -rf /var/lib/apt/lists/*
 
+RUN useradd -m -u 1001 -s /bin/bash appuser
+
 COPY --from=builder /tmp/code-golf /usr/local/bin/code-golf
 COPY ./templates /code-golf/templates
 COPY ./static /code-golf/static
+
+RUN chown -R appuser:appuser /code-golf
+USER appuser
+
 ENTRYPOINT ["/usr/local/bin/code-golf"]

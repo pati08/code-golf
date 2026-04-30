@@ -58,6 +58,7 @@ async fn judge(
     .await?;
 
     let time_limit_ms: i64 = problem.get("time_limit_ms");
+    let memory_limit_kb: i64 = problem.get("memory_limit_kb");
 
     let test_cases = sqlx::query(
         "SELECT input, expected_output, is_sample FROM test_cases WHERE problem_id = ? ORDER BY ordinal, id",
@@ -82,6 +83,7 @@ async fn judge(
             &code,
             &input,
             time_limit_ms as u64,
+            memory_limit_kb as u64,
         )
         .await?;
 
@@ -109,6 +111,7 @@ async fn judge(
                     &fmt_code,
                     &input,
                     time_limit_ms as u64,
+                    memory_limit_kb as u64,
                 )
                 .await?;
                 if fmt_result.exit_code != Some(0) {

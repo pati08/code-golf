@@ -5,6 +5,7 @@ use axum::{
 };
 use serde::Deserialize;
 use sqlx::Row;
+use tower_sessions::Session;
 
 use crate::{app::AppState, auth::{OptionalUser, RequiredUser}, error::AppError, submissions::judge};
 
@@ -12,14 +13,18 @@ use crate::{app::AppState, auth::{OptionalUser, RequiredUser}, error::AppError, 
 pub struct SubmitForm {
     pub language_id: i64,
     pub code: String,
+    pub csrf_token: String,
 }
 
 pub async fn post_submit(
     State(state): State<AppState>,
     Path(slug): Path<String>,
     RequiredUser(user): RequiredUser,
+    session: Session,
     Form(form): Form<SubmitForm>,
 ) -> Result<Html<String>, AppError> {
+    crate::csrf::validate(&session, &form.csrf_token).await?;
+
     if !state.rate_limiters.submit.check(user.id.to_string()).await {
         return Err(AppError::BadRequest("Submission rate limit exceeded. Try again shortly.".to_string()));
     }
@@ -62,7 +67,11 @@ pub async fn post_submit(
 
     let pool = state.db.clone();
     let runner = state.runner.clone();
-    tokio::spawn(judge::run(submission_id, pool, runner));
+    let semaphore = state.judge_semaphore.clone();
+    tokio::spawn(async move {
+        let _permit = semaphore.acquire_owned().await.expect("judge semaphore closed");
+        judge::run(submission_id, pool, runner).await;
+    });
 
     let html = format!(
         "<div hx-get=\"/submissions/{submission_id}\" hx-trigger=\"every 1s\" hx-swap=\"innerHTML\" hx-target=\"#submission-result\" class=\"submission-pending\">\

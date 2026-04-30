@@ -3,9 +3,10 @@ use axum::{
     http::HeaderMap,
     response::Html,
 };
-use pulldown_cmark::{Event, Parser, html};
+use pulldown_cmark::{Event, Parser, Tag, html};
 use serde::Deserialize;
 use sqlx::{QueryBuilder, Row};
+use tower_sessions::Session;
 
 use crate::{app::AppState, auth::OptionalUser, error::AppError};
 
@@ -20,33 +21,65 @@ pub struct FilterParams {
 }
 
 async fn fetch_tournament_list(
-    db: &sqlx::SqlitePool,
+    state: &AppState,
 ) -> Result<Vec<minijinja::Value>, AppError> {
+    if let Some(cached) = state.cache.tournament.get_list().await {
+        let rows = cached;
+        return Ok(rows
+            .iter()
+            .map(|(slug, name, is_active)| {
+                minijinja::context! {
+                    slug => slug.clone(),
+                    name => name.clone(),
+                    is_active => *is_active,
+                }
+            })
+            .collect());
+    }
+
     let rows = sqlx::query(
         "SELECT slug, name, is_active FROM tournaments ORDER BY is_active DESC, name ASC",
     )
-    .fetch_all(db)
+    .fetch_all(&state.db)
     .await?;
 
-    Ok(rows
+    let tournament_data: Vec<_> = rows
         .iter()
         .map(|r| {
+            (
+                r.get::<String, _>("slug"),
+                r.get::<String, _>("name"),
+                r.get::<i64, _>("is_active") != 0,
+            )
+        })
+        .collect();
+
+    state.cache.tournament.set_list(tournament_data.clone()).await;
+
+    Ok(tournament_data
+        .iter()
+        .map(|(slug, name, is_active)| {
             minijinja::context! {
-                slug => r.get::<String, _>("slug"),
-                name => r.get::<String, _>("name"),
-                is_active => r.get::<i64, _>("is_active") != 0,
+                slug => slug.clone(),
+                name => name.clone(),
+                is_active => *is_active,
             }
         })
         .collect())
 }
 
-async fn fetch_active_tournament_slug(db: &sqlx::SqlitePool) -> Result<Option<String>, AppError> {
-    Ok(
-        sqlx::query("SELECT slug FROM tournaments WHERE is_active = 1 LIMIT 1")
-            .fetch_optional(db)
-            .await?
-            .map(|r| r.get(0)),
-    )
+async fn fetch_active_tournament_slug(state: &AppState) -> Result<Option<String>, AppError> {
+    if let Some(cached) = state.cache.tournament.get_active_slug().await {
+        return Ok(cached);
+    }
+
+    let slug = sqlx::query("SELECT slug FROM tournaments WHERE is_active = 1 LIMIT 1")
+        .fetch_optional(&state.db)
+        .await?
+        .map(|r| r.get(0));
+
+    state.cache.tournament.set_active_slug(slug.clone()).await;
+    Ok(slug)
 }
 
 pub async fn get_problems(
@@ -58,8 +91,8 @@ pub async fn get_problems(
     let user_id: i64 = user.as_ref().map(|u| u.id).unwrap_or(0);
 
     let cookie_tournament = crate::app::get_cookie(&headers, "selectedTournament");
-    let active_tournament_slug = fetch_active_tournament_slug(&state.db).await?;
-    let all_tournaments = fetch_tournament_list(&state.db).await?;
+    let active_tournament_slug = fetch_active_tournament_slug(&state).await?;
+    let all_tournaments = fetch_tournament_list(&state).await?;
 
     // Determine effective tournament filter: query param > cookie > default
     let filter_tournament = params.tournament.as_deref().unwrap_or("");
@@ -106,8 +139,58 @@ pub async fn get_problems(
 
     let sql = query_builder.build();
 
-    let rows = if user_id == 0 {
-        sql.fetch_all(&state.db).await?
+    fn rows_to_all_items(rows: &[sqlx::sqlite::SqliteRow]) -> Vec<(minijinja::Value, bool)> {
+    rows.iter()
+        .map(|r| {
+            let solved = r.get::<i64, _>("solved") != 0;
+            let ctx = minijinja::context! {
+                slug => r.get::<String, _>("slug"),
+                title => r.get::<String, _>("title"),
+                difficulty => r.get::<String, _>("difficulty"),
+            };
+            (ctx, solved)
+        })
+        .collect()
+}
+
+fn problem_list_to_all_items(list: &crate::cache::ProblemList) -> Vec<(minijinja::Value, bool)> {
+    list.iter()
+        .map(|(slug, title, difficulty, solved)| {
+            let ctx = minijinja::context! {
+                slug => slug.clone(),
+                title => title.clone(),
+                difficulty => difficulty.clone(),
+            };
+            (ctx, *solved != 0)
+        })
+        .collect()
+}
+
+    let all_items: Vec<(minijinja::Value, bool)> = if user_id == 0 {
+        let cache_key =
+            crate::cache::AppCache::anon_problem_list_key(effective_tournament, valid_diff.clone());
+        if let Some(cached) = state.cache.problem_list.get(&cache_key).await {
+            problem_list_to_all_items(&cached)
+        } else {
+            let fetched = sql.fetch_all(&state.db).await?;
+            let problem_list: crate::cache::ProblemList = fetched
+                .iter()
+                .map(|r| {
+                    (
+                        r.get::<String, _>("slug"),
+                        r.get::<String, _>("title"),
+                        r.get::<String, _>("difficulty"),
+                        r.get::<i64, _>("solved"),
+                    )
+                })
+                .collect();
+            state
+                .cache
+                .problem_list
+                .insert(&cache_key, problem_list)
+                .await;
+            rows_to_all_items(&fetched)
+        }
     } else {
         let mut user_query = QueryBuilder::new(
             r#"SELECT p.id, p.slug, p.title, p.difficulty,
@@ -134,22 +217,9 @@ pub async fn get_problems(
         user_query.push(" CASE p.difficulty WHEN 'easy' THEN 1 WHEN 'medium' THEN 2 WHEN 'hard' THEN 3 ELSE 4 END,");
         user_query.push(" p.title ASC");
 
-        user_query.build().bind(user_id).fetch_all(&state.db).await?
+        let rows = user_query.build().bind(user_id).fetch_all(&state.db).await?;
+        rows_to_all_items(&rows)
     };
-
-    // Build problem list with solved flag
-    let all_items: Vec<(minijinja::Value, bool)> = rows
-        .iter()
-        .map(|r| {
-            let solved = r.get::<i64, _>("solved") != 0;
-            let ctx = minijinja::context! {
-                slug => r.get::<String, _>("slug"),
-                title => r.get::<String, _>("title"),
-                difficulty => r.get::<String, _>("difficulty"),
-            };
-            (ctx, solved)
-        })
-        .collect();
 
     let is_logged_in = user.is_some();
 
@@ -193,7 +263,9 @@ pub async fn get_problem(
     State(state): State<AppState>,
     Path(slug): Path<String>,
     OptionalUser(user): OptionalUser,
+    session: Session,
 ) -> Result<Html<String>, AppError> {
+    let csrf_token = crate::csrf::get_or_create_token(&session).await?;
     let row = sqlx::query(
         "SELECT id, slug, title, description, difficulty, time_limit_ms, memory_limit_kb FROM problems WHERE slug = ? AND is_published = 1",
     )
@@ -205,9 +277,34 @@ pub async fn get_problem(
     let problem_id: i64 = row.get("id");
     let description: String = row.get("description");
 
-    // Render markdown, stripping raw HTML to prevent XSS
+    // Render markdown, stripping raw HTML and dangerous URL schemes to prevent XSS
     let parser = Parser::new(&description)
-        .filter(|e| !matches!(e, Event::Html(_) | Event::InlineHtml(_)));
+        .filter(|e| !matches!(e, Event::Html(_) | Event::InlineHtml(_)))
+        .map(|e| match e {
+            Event::Start(Tag::Link { link_type, dest_url, title, id })
+                if dest_url.trim().to_lowercase().starts_with("javascript:")
+                    || dest_url.trim().to_lowercase().starts_with("data:") =>
+            {
+                Event::Start(Tag::Link {
+                    link_type,
+                    dest_url: pulldown_cmark::CowStr::Borrowed("#"),
+                    title,
+                    id,
+                })
+            }
+            Event::Start(Tag::Image { link_type, dest_url, title, id })
+                if dest_url.trim().to_lowercase().starts_with("javascript:")
+                    || dest_url.trim().to_lowercase().starts_with("data:") =>
+            {
+                Event::Start(Tag::Image {
+                    link_type,
+                    dest_url: pulldown_cmark::CowStr::Borrowed("#"),
+                    title,
+                    id,
+                })
+            }
+            _ => e,
+        });
     let mut description_html = String::new();
     html::push_html(&mut description_html, parser);
 
@@ -244,6 +341,7 @@ pub async fn get_problem(
         samples,
         languages,
         current_user => user,
+        csrf_token,
     };
     crate::app::render(&state.templates, "problems/detail.html", ctx)
 }

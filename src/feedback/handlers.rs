@@ -5,6 +5,7 @@ use axum::{
     Form,
 };
 use serde::Deserialize;
+use tower_sessions::Session;
 
 use crate::{
     app::AppState,
@@ -18,14 +19,18 @@ pub struct FeedbackForm {
     pub subject: String,
     pub message: String,
     pub page_url: Option<String>,
+    pub csrf_token: String,
 }
 
 pub async fn get_feedback_form(
     State(state): State<AppState>,
     OptionalUser(user): OptionalUser,
+    session: Session,
 ) -> Result<impl IntoResponse, AppError> {
+    let csrf_token = crate::csrf::get_or_create_token(&session).await?;
     let ctx = minijinja::context! {
         current_user => user,
+        csrf_token,
     };
     crate::app::render(&state.templates, "feedback/form.html", ctx).map(|html| html.into_response())
 }
@@ -33,8 +38,11 @@ pub async fn get_feedback_form(
 pub async fn post_feedback(
     State(state): State<AppState>,
     OptionalUser(user): OptionalUser,
+    session: Session,
     Form(form): Form<FeedbackForm>,
 ) -> Result<impl IntoResponse, AppError> {
+    crate::csrf::validate(&session, &form.csrf_token).await?;
+
     let rate_key = user.as_ref().map(|u| u.id.to_string()).unwrap_or_else(|| "anon".to_string());
     if !state.rate_limiters.feedback.check(rate_key).await {
         let ctx = minijinja::context! {

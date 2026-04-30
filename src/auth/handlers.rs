@@ -4,15 +4,16 @@ use argon2::{
     PasswordHasher,
     PasswordVerifier,
     password_hash::SaltString,
-    // password_hash::rand_core::OsRng,
 };
 use axum::{
     Form, debug_handler,
     extract::State,
+    http::HeaderMap,
     response::{Html, Redirect, IntoResponse},
 };
 use rand::Rng;
 use serde::Deserialize;
+use std::sync::OnceLock;
 use tower_sessions::Session;
 
 use crate::{
@@ -21,17 +22,43 @@ use crate::{
     error::AppError,
 };
 
+static DUMMY_HASH: OnceLock<String> = OnceLock::new();
+
+fn dummy_hash() -> &'static str {
+    DUMMY_HASH.get_or_init(|| {
+        let mut bytes = [0u8; 16];
+        rand::rng().fill_bytes(&mut bytes);
+        let salt = SaltString::encode_b64(&bytes).expect("salt too long");
+        Argon2::default()
+            .hash_password(b"dummy_constant_time_password_xkcd", &salt)
+            .unwrap()
+            .to_string()
+    })
+}
+
+fn extract_ip(headers: &HeaderMap) -> String {
+    headers
+        .get("x-real-ip")
+        .or_else(|| headers.get("x-forwarded-for"))
+        .and_then(|v| v.to_str().ok())
+        .map(|s| s.split(',').next().unwrap_or("").trim().to_string())
+        .filter(|s| !s.is_empty())
+        .unwrap_or_else(|| "unknown".to_string())
+}
+
 #[derive(Deserialize)]
 pub struct RegisterForm {
     pub username: String,
     pub email: String,
     pub password: String,
+    pub csrf_token: String,
 }
 
 #[derive(Deserialize)]
 pub struct LoginForm {
     pub username: String,
     pub password: String,
+    pub csrf_token: String,
 }
 
 /// Validate username: alphanumeric and underscores only, 3-30 chars
@@ -72,8 +99,12 @@ fn validate_email(email: &str) -> Result<(), &'static str> {
     Ok(())
 }
 
-pub async fn get_register(State(state): State<AppState>) -> Result<Html<String>, AppError> {
-    let ctx = minijinja::context! { error => Option::<String>::None };
+pub async fn get_register(
+    State(state): State<AppState>,
+    session: Session,
+) -> Result<Html<String>, AppError> {
+    let csrf_token = crate::csrf::get_or_create_token(&session).await?;
+    let ctx = minijinja::context! { error => Option::<String>::None, csrf_token };
     crate::app::render(&state.templates, "auth/register.html", ctx)
 }
 
@@ -81,9 +112,17 @@ pub async fn get_register(State(state): State<AppState>) -> Result<Html<String>,
 pub async fn post_register(
     State(state): State<AppState>,
     session: Session,
+    headers: HeaderMap,
     Form(form): Form<RegisterForm>,
 ) -> Result<axum::response::Response, AppError> {
-    // Rate limit by email to prevent registration spam
+    crate::csrf::validate(&session, &form.csrf_token).await?;
+
+    // Rate limit by IP first, then by email
+    let ip = extract_ip(&headers);
+    if !state.rate_limiters.register_ip.check(&ip).await {
+        let ctx = minijinja::context! { error => "Too many registration attempts. Try again later." };
+        return Ok(crate::app::render(&state.templates, "auth/register.html", ctx)?.into_response());
+    }
     if !state.rate_limiters.register.check(&form.email).await {
         let ctx = minijinja::context! { error => "Too many registration attempts. Try again later." };
         return Ok(crate::app::render(&state.templates, "auth/register.html", ctx)?.into_response());
@@ -157,19 +196,31 @@ pub async fn post_register(
     }
 }
 
-pub async fn get_login(State(state): State<AppState>) -> Result<Html<String>, AppError> {
-    let ctx = minijinja::context! { error => Option::<String>::None };
+pub async fn get_login(
+    State(state): State<AppState>,
+    session: Session,
+) -> Result<Html<String>, AppError> {
+    let csrf_token = crate::csrf::get_or_create_token(&session).await?;
+    let ctx = minijinja::context! { error => Option::<String>::None, csrf_token };
     crate::app::render(&state.templates, "auth/login.html", ctx)
 }
 
 pub async fn post_login(
     State(state): State<AppState>,
     session: Session,
+    headers: HeaderMap,
     Form(form): Form<LoginForm>,
 ) -> Result<axum::response::Response, AppError> {
     use sqlx::Row;
 
-    // Rate limit by username to slow password-spray attacks
+    crate::csrf::validate(&session, &form.csrf_token).await?;
+
+    // Rate limit by IP first, then by username
+    let ip = extract_ip(&headers);
+    if !state.rate_limiters.login_ip.check(&ip).await {
+        let ctx = minijinja::context! { error => "Too many login attempts. Try again later." };
+        return Ok(crate::app::render(&state.templates, "auth/login.html", ctx)?.into_response());
+    }
     if !state.rate_limiters.login.check(&form.username).await {
         let ctx = minijinja::context! { error => "Too many login attempts. Try again later." };
         return Ok(crate::app::render(&state.templates, "auth/login.html", ctx)?.into_response());
@@ -181,40 +232,33 @@ pub async fn post_login(
             .fetch_optional(&state.db)
             .await?;
 
-    let row = match row {
-        Some(r) => r,
-        None => {
-            let ctx = minijinja::context! {
-                error => "Invalid username or password"
-            };
-            return Ok(crate::app::render(&state.templates, "auth/login.html", ctx)?.into_response());
+    // Always run Argon2 verify regardless of whether the user was found,
+    // to prevent username enumeration via timing differences.
+    let (row, hash_str) = match row {
+        Some(r) => {
+            let h = r.get::<String, _>("password_hash");
+            (Some(r), h)
         }
+        None => (None, dummy_hash().to_string()),
     };
 
-    let id: i64 = row.get("id");
-    let username: String = row.get("username");
-    let password_hash: String = row.get("password_hash");
-    let is_admin_val: i64 = row.get("is_admin");
-    let is_admin = is_admin_val != 0;
-
-    let parsed_hash = PasswordHash::new(&password_hash)
+    let parsed_hash = PasswordHash::new(&hash_str)
         .map_err(|e| AppError::Internal(anyhow::anyhow!("Password hash parse error: {e}")))?;
-
-    if Argon2::default()
+    let verify_ok = Argon2::default()
         .verify_password(form.password.as_bytes(), &parsed_hash)
-        .is_err()
-    {
-        let ctx = minijinja::context! {
-            error => "Invalid username or password"
-        };
+        .is_ok();
+
+    if row.is_none() || !verify_ok {
+        let ctx = minijinja::context! { error => "Invalid username or password" };
         return Ok(crate::app::render(&state.templates, "auth/login.html", ctx)?.into_response());
     }
 
-    let current_user = CurrentUser {
-        id,
-        username,
-        is_admin,
-    };
+    let row = row.unwrap();
+    let id: i64 = row.get("id");
+    let username: String = row.get("username");
+    let is_admin = row.get::<i64, _>("is_admin") != 0;
+
+    let current_user = CurrentUser { id, username, is_admin };
     session.cycle_id().await.map_err(|e| AppError::Internal(anyhow::anyhow!("Session error: {e}")))?;
     set_session_user(&session, &current_user).await?;
     Ok(Redirect::to("/").into_response())

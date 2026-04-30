@@ -3,6 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="csrf-token" content="{{ csrf_token | default('') }}">
   <title>{% block title %}Code Golf{% endblock %}</title>
   <link rel="stylesheet" href="/static/style.css">
   <script src="https://unpkg.com/htmx.org@2.0.4" defer></script>
@@ -106,6 +107,39 @@
         document.cookie = 'selectedTournament=' + encodeURIComponent(val) + ';path=/;max-age=31536000;SameSite=Lax';
       }
     });
+  </script>
+
+  <script>
+    (function() {
+      const token = document.querySelector('meta[name="csrf-token"]')?.content;
+      if (!token) return;
+
+      // Inject CSRF token into all standard HTML POST forms
+      function injectCsrf() {
+        document.querySelectorAll('form[method="post"], form[method="POST"]').forEach(function(form) {
+          if (!form.querySelector('input[name="csrf_token"]')) {
+            var input = document.createElement('input');
+            input.type = 'hidden';
+            input.name = 'csrf_token';
+            input.value = token;
+            form.appendChild(input);
+          }
+        });
+      }
+
+      // Run on DOMContentLoaded and also after HTMX swaps (for dynamically loaded forms like feedback)
+      document.addEventListener('DOMContentLoaded', injectCsrf);
+      document.addEventListener('htmx:afterSwap', injectCsrf);
+
+      // Include CSRF token in all HTMX requests
+      document.addEventListener('htmx:configRequest', function(event) {
+        event.detail.headers['X-CSRF-Token'] = token;
+        // Also add as form parameter for form submissions
+        if (!event.detail.parameters['csrf_token']) {
+          event.detail.parameters['csrf_token'] = token;
+        }
+      });
+    })();
   </script>
 </body>
 </html>

@@ -1,4 +1,5 @@
 use std::sync::{Arc, RwLock};
+use tokio::sync::Semaphore;
 
 use axum::{
     Router,
@@ -25,6 +26,7 @@ pub struct AppState {
     pub runner: Arc<LanguageRegistry>,
     pub cache: AppCache,
     pub rate_limiters: RateLimiters,
+    pub judge_semaphore: Arc<Semaphore>,
 }
 
 pub fn render(
